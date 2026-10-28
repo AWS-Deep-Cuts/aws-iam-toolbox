@@ -1,0 +1,4 @@
+resource-ids.env
+hands-on/output/
+__pycache__/
+*.pyc
