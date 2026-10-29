@@ -17,8 +17,10 @@
 //   - ステージと修正は DESIGN-v3-iam.md の「ステージ」の表と、README の各ステージの「修正の手順」による。
 //     IAM コンソールの「許可」タブで「削除」を選ぶと、インラインポリシーは削除され（DeleteRolePolicy）、
 //     管理ポリシーはロールからデタッチされる（DetachRolePolicy）。管理ポリシーそのものは後片付けまで残る。
-//   - コンソールの画面の名前（「許可」タブ・許可ポリシー・許可の境界・「タグ」タブ）は DESIGN-v3-iam.md の
-//     「コンソールの操作で使う画面の名前」による
+//   - コンソールの画面の名前（「許可」タブの「許可ポリシー」と「許可の境界」、「タグ」タブ）は DESIGN-v3-iam.md の
+//     「コンソールの操作で使う画面の名前」による。画面の表示名はすべて「」で囲み、用語（アクセス許可の境界など）と区別する。
+//     画面写真を撮るときに、日本語のコンソールの表示と照合する
+//   - 凡例は 5 枚で同じ 2 行にする。1 行目は札の意味。2 行目は、差し色の札（stage-N だけ）と点線の行の意味
 (() => {
   const MODE = document.body.dataset.mode || 'initial';
   const S = MODE === 'initial' ? 0 : Number(MODE.replace('stage-', ''));
@@ -48,10 +50,10 @@
   const ROWS = [
     { id: 'r1', n: 1, h: 70, type: 'インラインポリシー', name: 'aws-deepcuts-inline-deny',
       lines: [`${eff('Deny', S === 1)} ${code('iam:GetPolicy')}`],
-      absent: S >= 2, where: '「許可」タブ ・ 許可ポリシー', done: '削除済み' },
+      absent: S >= 2, where: '「許可」タブの「許可ポリシー」', done: '削除済み' },
     { id: 'r2', n: 1, h: 70, type: '管理ポリシー', name: 'aws-deepcuts-managed-deny',
       lines: [`${eff('Deny', S === 1)} ${code('iam:GetPolicy')}`],
-      absent: S >= 2, where: '「許可」タブ ・ 許可ポリシー', done: 'デタッチ済み' },
+      absent: S >= 2, where: '「許可」タブの「許可ポリシー」', done: 'デタッチ済み' },
     { id: 'r3', n: 2, h: 92, type: '管理ポリシー', name: 'aws-deepcuts-read-certificate',
       lines: [`${eff('Allow')} ${code('iam:GetPolicy')}`,
               `条件：タグ ${code('team')} が ${code('security', S === 3)}`],
@@ -63,7 +65,7 @@
       lines: [`${eff('Allow')} ${code('iam:ListPolicies')} と`,
               `${code('sts:GetCallerIdentity')} だけ`,
               `<span class="${S === 4 ? 'hotline' : ''}">${code('iam:GetPolicy')} を含まない</span>`],
-      absent: false, where: '「許可」タブ ・ 許可の境界', done: '' },
+      absent: false, where: '「許可」タブの「許可の境界」', done: '' },
   ];
   // 右の列の注記
   const note = (r) => {
@@ -87,8 +89,9 @@
   const top = {};
   for (const r of ROWS) { top[r.id] = y; y += r.h + GAP; }
   const CARD_H = y - GAP + PAD + BORDER - CARD_Y;
-  const LEGEND_Y = CARD_Y + CARD_H + 14;
-  const FIG_H = LEGEND_Y + 30;
+  const LEGEND_Y = CARD_Y + CARD_H + 14;     // 凡例の 1 行目
+  const LEGEND_Y2 = LEGEND_Y + 36;           // 凡例の 2 行目
+  const FIG_H = LEGEND_Y2 + 40;
 
   const css = `
   #fig { width: 800px; height: ${FIG_H}px; }
@@ -160,8 +163,10 @@
   .lbl.deny { color: var(--hot); font-weight: 900; line-height: 22px; }
   .lbl.deny code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
 
-  /* 凡例 */
-  .legend { position: absolute; left: 0; top: ${LEGEND_Y}px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 500; }
+  /* 凡例。2 行目には、差し色の札（stage-N だけ）と、点線の行の見本を並べる */
+  .legend { position: absolute; left: 0; display: flex; align-items: center; gap: 28px; font-size: 16px; font-weight: 500; }
+  .legend > span { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .legend .dsh { display: block; width: 44px; height: 26px; border: 2px dashed var(--grey); flex: none; }
   `;
   document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
 
@@ -202,7 +207,10 @@
     html += `<div class="fix" id="fix" style="top:${top[fix.rows[0]]}px"><i>管理者が IAM コンソールで修正</i><b>${fix.title}</b><span>${fix.sub}</span></div>`;
   }
 
-  html += `<div class="legend"><span class="stg">ステージ N</span><span>この設定が、拒否の原因になるステージ</span></div>`;
+  html += `<div class="legend" style="top:${LEGEND_Y}px"><span><span class="stg">ステージ N</span>ハンズオンで、これが拒否の原因になるステージ</span></div>`;
+  html += `<div class="legend" style="top:${LEGEND_Y2}px">`
+    + (S > 0 ? `<span><span class="stg now">ステージ ${S}</span>このステージの原因</span>` : '')
+    + `<span><span class="dsh"></span>点線の行は、ロールに無い設定</span></div>`;
 
   const fig = document.getElementById('fig');
   fig.insertAdjacentHTML('beforeend', html);
