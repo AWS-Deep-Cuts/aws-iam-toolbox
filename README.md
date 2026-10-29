@@ -8,8 +8,8 @@
 <!-- TODO（公開前に著者が確認）: ステージ 1〜4 と追加ステージのそれぞれで、iam:GetPolicy の拒否のエラーメッセージに authorization ID とコンソールの URL が付くことを実機で確かめ、確かめた日付を下の Note に書く -->
 
 > **Note**: IAM Access Troubleshooter は、2026 年 8 月にプレビューとして提供が始まった機能で、2026 年 10 月時点でもプレビューです。画面や仕様は、今後変わる可能性があります。
-> - AWS SDK と AWS CLI のリリースノートによると、プレビューを提供するリージョンは、**バージニア北部（`us-east-1`）だけ** です。2026 年 10 月時点で、東京リージョンでの提供は発表されていません。拒否が起きたのと同じリージョンで照会する必要があるため、このハンズオンはすべて `us-east-1` で実施します。
-> - 公式ドキュメントによると、拒否されたリクエストを識別する authorization ID がエラーメッセージに付くのは、主に IAM（AWS Identity and Access Management）の API です。そのため、このハンズオンでは IAM のポリシーを読み取る操作を題材にします。
+> - 2026 年 8 月 25 日の AWS SDK と AWS CLI のリリースノートによると、プレビューを提供するリージョンは、**バージニア北部（`us-east-1`）だけ** です。公式ドキュメントは、対応する API とリージョンを順次広げていると説明しています。筆者が 2026 年 10 月に確認した範囲では、東京リージョンでの提供の発表は見つかりませんでした。この機能で拒否の原因を調べるときは、拒否が起きたのと同じリージョンで調べる必要があります。そのため、このハンズオンはすべて `us-east-1` で実施します。
+> - 公式ドキュメントによると、2026 年 10 月時点で、拒否されたリクエストを識別する authorization ID がエラーメッセージに付くのは、IAM（AWS Identity and Access Management）の大半の API です。そのため、このハンズオンでは IAM のポリシーを読み取る操作を題材にします。
 >
 > この機能は、使う場所によって名前が異なります。この README では、Access Troubleshooter と呼びます。
 >
@@ -37,15 +37,15 @@ AWS Deep Cutsは、AWS の最新のサービスやニッチな機能、または
 
 このハンズオンでは、IAM がリクエストを拒否する 4 種類の原因を、ステージとして 1 つずつ特定して解消します。
 
-IAM は、リクエストを拒否すると、エラーメッセージの最後に **authorization ID** を付けます。authorization ID は、IAM が拒否したリクエストを 1 件ずつ識別する ID です。この ID を Access Troubleshooter で照会すると、IAM がそのリクエストをどう評価したかの記録を確認できます。この記録を **評価の詳細** と呼びます。
+IAM は、対応している API へのリクエストを拒否すると、エラーメッセージの最後に **authorization ID** を付けます。ただし、公式ドキュメントによると、対応している API でも、authorization ID が付くことは保証されていません。authorization ID は、IAM が拒否したリクエストを 1 件ずつ識別する ID です。この ID を Access Troubleshooter で照会すると、IAM がそのリクエストをどう評価したかの記録を確認できます。この記録を **評価の詳細** と呼びます。
 
 あなたは、ハンズオン用の IAM ロール `aws-deepcuts-handson-role` に切り替えて、IAM のポリシー `aws-deepcuts-certificate` の説明文を読み取ります。この説明文には、ハンズオンの修了証が書かれています。ただし、事前準備で実行する `setup.sh` は、このロールで読み取りが拒否される原因を 4 種類用意します。拒否されるたびに、あなたはエラーメッセージの authorization ID で評価の詳細を開いて原因を特定し、IAM コンソールで設定を修正します。4 つのステージをクリアすると、修了証を読み取れます。この README では、`aws-deepcuts-handson-role` をハンズオン用ロール、`aws-deepcuts-certificate` を修了証のポリシーと呼びます。
 
-IAM のポリシーは、1 つ以上のステートメントからなります。ステートメントは、ポリシーの中の 1 つの規則です。ステートメントには、許可するか拒否するかを Allow か Deny で表す Effect、対象の操作を表す Action、対象のリソースを表す Resource を書きます。必要に応じて、条件を表す Condition も書きます。各ステートメントには、区別のための ID である Sid（Statement ID）を付けられます。
+IAM のポリシーは、1 つ以上のステートメントからなります。ステートメントは、ポリシーの中の 1 つの規則です。ステートメントには、許可するか拒否するかを Allow か Deny で表す Effect、対象の操作を表す Action、対象のリソースを表す Resource を書きます。必要に応じて、条件を表す Condition も書きます。各ステートメントには、区別のための ID である Sid（Statement ID）を付けられます。ステートメントを並べたポリシーの内容を、この README ではポリシーの本文と呼びます。IAM コンソールは、ポリシーの本文を JSON で表示します。
 
 IAM の権限を決めるポリシーには、許可を与えるポリシーと、許可を絞るポリシーがあります。許可を与えるポリシーは、ID ベースポリシーとリソースベースポリシーです。ID ベースポリシーは、IAM のユーザーやロールに設定するポリシーで、IAM コンソールのロールの画面では「許可ポリシー」として表示されます。許可を与えるポリシーに分類される ID ベースポリシーにも、Deny のステートメントを書けます。リソースベースポリシーは、S3 バケットなどのリソースに設定するポリシーです。
 
-許可を絞るポリシーは、アクセス許可の境界・セッションポリシー・SCP（サービスコントロールポリシー）・RCP（リソースコントロールポリシー）・VPC エンドポイントポリシーです。許可を絞るポリシーの Allow は、操作を許可するのではなく、許可できる操作の上限を定めます。たとえば、アクセス許可の境界は、ロールが行える操作の上限を定めるポリシーです。セッションポリシーは、ロールに切り替えるときに渡すポリシーで、切り替えた後に行える操作の上限を定めます。
+許可を絞るポリシーは、アクセス許可の境界・セッションポリシー・SCP（サービスコントロールポリシー）・RCP（リソースコントロールポリシー）・VPC エンドポイントポリシーです。許可を絞るポリシーの Allow は、操作を許可するのではなく、許可できる操作の上限を定めます。たとえば、アクセス許可の境界は、ロールが行える操作の上限を定めるポリシーです。セッションポリシーは、ロールに切り替えるときに渡すポリシーで、切り替えた後に行える操作の上限を定めます。SCP と RCP は、AWS Organizations で使うポリシーです。AWS Organizations は、複数の AWS アカウントを 1 つの組織としてまとめて管理するサービスです。SCP は、組織のアカウント内のユーザーやロールが行える操作の上限を定めます。RCP は、組織のアカウント内のリソースに対して行える操作の上限を定めます。
 
 ポリシーは、作成のしかたによって、管理ポリシーとインラインポリシーにも分かれます。管理ポリシーは、独立して作成し、複数のユーザーやロールにアタッチできるポリシーです。インラインポリシーは、1 つのユーザーやロールの中に直接書き込むポリシーです。
 
@@ -55,7 +55,7 @@ IAM がポリシーを評価する順序を簡略化すると、次の図のよ�
 
 図の `EXPLICIT_DENY`・`IMPLICIT_DENY`・`ALLOW` は、IAM の評価の結論を表す値で、評価の詳細にも含まれます。この README では、この値を判定と呼びます。
 
-問い 1 では、リクエストに一致する Deny のステートメントがあるかを確かめます。ステートメントがリクエストに一致するとは、ステートメントの Action と Resource がリクエストの操作と対象に当てはまり、Condition があればその条件も満たすことです。一致する Deny があれば、IAM はリクエストを拒否します。これを **明示的な拒否** と呼びます。問い 2 では、許可を与えるポリシーに、一致する Allow のステートメントがあるかを確かめます。問い 3 では、設定されている許可を絞るポリシーのそれぞれに、一致する Allow のステートメントがあるかを確かめます。問い 2 か問い 3 で、必要な Allow が無いために拒否されることを、**暗黙的な拒否** と呼びます。4 つのステージの拒否は、この順序で 1 つずつ現れます。
+問い 1 では、IAM は、リクエストに一致する Deny のステートメントがあるかを確かめます。ステートメントがリクエストに一致するとは、ステートメントの Action と Resource がリクエストの操作と対象に当てはまり、Condition があればその条件も満たすことです。一致する Deny があれば、IAM はリクエストを拒否します。これを **明示的な拒否** と呼びます。問い 2 では、IAM は、許可を与えるポリシーに、一致する Allow のステートメントがあるかを確かめます。問い 3 では、IAM は、設定されている許可を絞るポリシーのそれぞれに、一致する Allow のステートメントがあるかを確かめます。問い 2 か問い 3 で、必要な Allow が無いために拒否されることを、**暗黙的な拒否** と呼びます。4 つのステージの拒否は、この順序で 1 つずつ現れます。
 
 | ステージ | 拒否の原因 | 拒否される問い |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ IAM がポリシーを評価する順序を簡略化すると、次の図のよ�
 このハンズオンを終えると、次の 3 つができるようになります。
 
 1. `AccessDenied` のエラーメッセージから authorization ID を見つけ、Access Troubleshooter で評価の詳細を表示できる
-2. 評価の詳細の 4 つの項目から、拒否の原因を特定できる
+2. 評価の詳細とエラーメッセージの拒否の理由を組み合わせて、拒否の原因を特定できる
 3. 明示的な拒否と暗黙的な拒否を区別し、それぞれの原因を調べられる
 
 # ハンズオン手順
@@ -77,6 +77,8 @@ IAM がポリシーを評価する順序を簡略化すると、次の図のよ�
 ## 構築するアーキテクチャ
 
 ![構成図](img/architecture.png)
+
+図の手順 1〜4 は、この README の「１．事前準備」〜「４．拒否を 1 つずつ解消する」に対応します。左の点線の枠は、あなたが操作する 2 つの画面です。右の枠は、AWS アカウントの中で使うサービスとリソースです。
 
 この README では、CloudShell とマネジメントコンソールにサインインしているあなた自身のユーザー、つまり IAM ユーザーまたは IAM Identity Center のユーザーを「管理者」と呼びます。ハンズオン用ロールに切り替えている間を除き、操作はすべて管理者として行います。
 
@@ -89,7 +91,7 @@ IAM がポリシーを評価する順序を簡略化すると、次の図のよ�
 - AWS CloudShell を **バージニア北部（us-east-1）** で開くこと
 - ルートユーザーではなく、IAM ユーザーまたは IAM Identity Center のユーザーでサインインしていること。ルートユーザーはロールに切り替えられないため、このハンズオンを実施できません。
 - CloudShell を開いたブラウザの別のタブで、IAM コンソールと Access Troubleshooter の画面を表示できること。CloudShell は、マネジメントコンソールにサインインしているユーザーの権限で動きます。
-- 実行するユーザーに、IAM のロールとポリシーの作成・変更・削除、作成したロールへの `sts:AssumeRole`、`iam:GetRequestAuthorizationDetails`、CloudShell を使う権限があること。`AdministratorAccess` 相当の権限で実施するのが簡単です。
+- 管理者に、次の権限があること。IAM のロールとポリシーを作成・変更・削除する権限、作成したロールへの `sts:AssumeRole` の権限、`iam:GetRequestAuthorizationDetails` の権限、CloudShell を使う権限です。`AdministratorAccess` 相当の権限で実施するのが簡単です。
 
 <details>
 <summary>最小権限に近い IAM ポリシーの例</summary>
@@ -151,16 +153,7 @@ CloudShell を使う権限は、このポリシーとは別に必要です。た
 
 ハンズオン用ロールに `"Action": "*"` のような広い許可を追加して解決することは避けてください。いくつかの拒否がまとめて解消され、原因を 1 つずつ特定する練習ができなくなります。
 
-> **Note**: ハンズオン用ロールへの切り替えと、コマンドで使う `CERT_ARN` などの変数は、`source ./switch-role.sh` を実行した CloudShell のタブの中だけで有効です。CloudShell は、操作しない時間が続くと、シェルを終了します。シェルが終了したとき、または新しいタブを開いたときは、次のコマンドを実行してから続けてください。手順 3 の「CLI で評価の詳細を取得する方法」で AWS CLI をホームディレクトリにインストールした場合は、先に `export PATH="$HOME/.local/bin:$PATH"` を実行します。
->
-> ```bash
-> cd ~/aws-iam-toolbox/hands-on
-> source ./switch-role.sh
-> ```
->
-> ハンズオン用ロールの一時的な認証情報は、切り替えから 1 時間で失効します。`ExpiredToken` と表示されたら、`source ./switch-role.sh` を実行し直してください。
-
-以降、各種コマンドは[CloudShell](https://docs.aws.amazon.com/cloudshell/latest/userguide/welcome.html)（**us-east-1**）で実行してください。
+以降、各種コマンドは **us-east-1** の[CloudShell](https://docs.aws.amazon.com/cloudshell/latest/userguide/welcome.html)で実行してください。
 
 ## １．事前準備
 
@@ -184,8 +177,8 @@ bash ./setup.sh
 | --- | --- | --- | --- |
 | 管理ポリシー | `aws-deepcuts-certificate` | 修了証のポリシー。説明文に修了証が書かれている。本文はすべての操作を Deny する内容のため、ロールにアタッチしない | ゴール |
 | IAM ロール | `aws-deepcuts-handson-role` | ハンズオン用ロール。タグ `team` の値は `dev`。アクセス許可の境界に `aws-deepcuts-boundary` を設定 | すべて |
-| インラインポリシー | `aws-deepcuts-inline-deny` | ハンズオン用ロールの中に直接書き込まれたポリシー。修了証のポリシーへの `iam:GetPolicy` を Deny する | 1 |
-| 管理ポリシー | `aws-deepcuts-managed-deny` | ハンズオン用ロールにアタッチ済み。修了証のポリシーへの `iam:GetPolicy` を Deny する | 1 |
+| インラインポリシー | `aws-deepcuts-inline-deny` | ハンズオン用ロールの中に直接書き込まれたポリシー。Sid が `DenyReadCertificateInline` のステートメントで、修了証のポリシーへの `iam:GetPolicy` を Deny する | 1 |
+| 管理ポリシー | `aws-deepcuts-managed-deny` | ハンズオン用ロールにアタッチ済み。Sid が `DenyReadCertificate` のステートメントで、修了証のポリシーへの `iam:GetPolicy` を Deny する | 1 |
 | 管理ポリシー | `aws-deepcuts-read-certificate` | 修了証のポリシーへの `iam:GetPolicy` を Allow する。ただし、ハンズオン用ロールのタグ `team` の値が `security` の場合だけ。まだアタッチしていない | 2・3 |
 | 管理ポリシー | `aws-deepcuts-boundary` | アクセス許可の境界。`iam:ListPolicies` と `sts:GetCallerIdentity` だけを Allow する。`iam:GetPolicy` を含まない | 4 |
 
@@ -196,19 +189,19 @@ bash ./setup.sh
 <!-- 画面写真: IAM コンソールの aws-deepcuts-handson-role の「許可」タブ。許可ポリシーの一覧（2 つのポリシー）と、許可の境界の欄を枠で囲む -->
 
 > **この手順で確かめること**
-> - **やること**: マネジメントコンソールで IAM を開き、左のメニューの「ロール」から `aws-deepcuts-handson-role` を開きます。「許可」タブと「タグ」タブを確認します。「許可」タブの許可ポリシーの一覧で `aws-deepcuts-managed-deny` を開き、ポリシーの JSON も確認します。
-> - **期待する結果**: 「許可」タブの許可ポリシーの一覧に、`aws-deepcuts-inline-deny` と `aws-deepcuts-managed-deny` の 2 つがあります。同じタブの許可の境界の欄に `aws-deepcuts-boundary` があります。「タグ」タブに、キー `team`、値 `dev` のタグがあります。`aws-deepcuts-managed-deny` の JSON では、`Effect` が `Deny`、`Sid` が `DenyReadCertificate` です。
-> - **ここから分かること**: 1 つのロールには、種類の異なる複数のポリシーが関係しています。許可ポリシーは、ロールに許可または拒否する操作を定めます。評価の詳細では、許可ポリシーは ID ベースポリシー（`IDENTITY_BASED_POLICY`）として表示されます。アクセス許可の境界は、ロールが行える操作の上限を定めます。タグは、ポリシーの条件の評価に使われます。
+> - **やること**: マネジメントコンソールで IAM を開き、左のメニューの「ロール」から `aws-deepcuts-handson-role` を開きます。「許可」タブと「タグ」タブを確認します。「許可」タブの「許可ポリシー」の一覧で `aws-deepcuts-managed-deny` を開き、ポリシーの JSON も確認します。
+> - **期待する結果**: 「許可」タブの「許可ポリシー」の一覧に、`aws-deepcuts-inline-deny` と `aws-deepcuts-managed-deny` の 2 つがあります。同じタブの「許可の境界」の欄に、アクセス許可の境界として `aws-deepcuts-boundary` があります。「タグ」タブに、キー `team`、値 `dev` のタグがあります。キー `Project`、値 `aws-deepcuts` のタグもありますが、このタグはどのステージの拒否にも関係しません。`aws-deepcuts-managed-deny` の JSON では、`Effect` が `Deny`、`Sid` が `DenyReadCertificate` です。
+> - **ここから分かること**: 1 つのロールには、種類の異なる複数のポリシーが関係しています。「許可ポリシー」の一覧にある ID ベースポリシーは、ロールに許可または拒否する操作を定めます。手順 3 で確認する評価の詳細を API で取得すると、ID ベースポリシーは、種類が `IDENTITY_BASED_POLICY` のポリシーとして表されます。アクセス許可の境界は、ロールが行える操作の上限を定めます。タグは、ポリシーの条件の評価に使われます。
 
-## ２．ハンズオン用ロールで修了証を読み取る
+## ２．ハンズオン用ロールで修了証の読み取りを試す
 
-ハンズオン用ロールに切り替えます。ロールに切り替える操作は、AWS STS の AssumeRole という API で行います。`switch-role.sh` は、次のコマンドで AWS STS にロールの切り替えを依頼します。
+ハンズオン用ロールに切り替えます。ロールに切り替える操作は、AWS STS の AssumeRole という API で行います。`switch-role.sh` は、次のコマンドで AWS STS にロールの切り替えを依頼します。このコマンドは、スクリプトの動作を説明するために示したもので、CloudShell には貼り付けません。
 
 ```text
 aws sts assume-role --role-arn "${ROLE_ARN}" --role-session-name "handson-$(date +%H%M%S)" --duration-seconds 3600
 ```
 
-AWS STS は、1 時間有効な一時的な認証情報を返します。この一時的な認証情報を使って行う一連の操作を、セッションと呼びます。セッションには、名前とタグを付けられます。`switch-role.sh` は、`handson-` に実行した時刻をつなげた `handson-153012` のような文字列を、セッションの名前にします。
+実際の `switch-role.sh` は、このほかに、リージョンを指定する `--region us-east-1` と、応答から認証情報だけを取り出す `--query` と `--output text` も指定します。AWS STS は、1 時間有効な一時的な認証情報を返します。この一時的な認証情報を使って行う一連の操作を、セッションと呼びます。セッションには、名前とタグを付けられます。`switch-role.sh` は、`handson-` に実行した時刻をつなげた `handson-153012` のような文字列を、セッションの名前にします。
 
 一時的な認証情報は、アクセスキー ID・シークレットアクセスキー・セッショントークンの 3 つです。`switch-role.sh` は、これらを環境変数 `AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`・`AWS_SESSION_TOKEN` に設定します。AWS CLI は、環境変数の認証情報を、CloudShell の管理者の認証情報より優先して使います。環境変数を今のシェルに残すため、`bash` ではなく `source` で実行します。
 
@@ -216,13 +209,24 @@ AWS STS は、1 時間有効な一時的な認証情報を返します。この�
 source ./switch-role.sh
 ```
 
-出力の形の例は次のとおりです。アカウント ID とセッション名は、環境ごとに異なります。
+出力の形の例は次のとおりです。アカウント ID とセッション名は、環境ごとに異なります。2 行目と 3 行目は、この後に実行するコマンドの案内です。
 
 ```text
-ハンズオン用ロールに切り替えました: arn:aws:sts::123456789012:assumed-role/aws-deepcuts-handson-role/handson-153012
+ハンズオン用ロールに切り替えました: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012
+  修了証のポリシーを読み取る: aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --output text
+  管理者に戻る:             source ./switch-back.sh
 ```
 
 `assumed-role/<ロール名>/<セッション名>` は、ロールに切り替えたセッションを表す ARN です。AWS にリクエストを送る IAM ユーザーや IAM ロールを、プリンシパルと呼びます。この後のエラーメッセージの先頭の `User:` には、拒否されたプリンシパルとして、この ARN が表示されます。プロンプトの先頭に `(handson-role)` が表示されている間は、ハンズオン用ロールとして操作しています。
+
+> **Note**: `source ./switch-role.sh` で切り替えたハンズオン用ロールの認証情報と、`CERT_ARN` などの変数は、そのコマンドを実行した CloudShell のタブの中だけで有効です。CloudShell は、操作しない時間が続くと、シェルを終了します。シェルが終了したとき、または新しいタブを開いたときは、次のコマンドを実行してから続けてください。
+>
+> ```bash
+> cd ~/aws-iam-toolbox/hands-on
+> source ./switch-role.sh
+> ```
+>
+> シェルが終了して、エラーメッセージが画面から消えた場合は、もう一度読み取りを試し、新しく表示されたエラーメッセージの authorization ID を使います。ハンズオン用ロールの一時的な認証情報は、切り替えから 1 時間で失効します。`ExpiredToken` と表示されたら、`source ./switch-role.sh` を実行し直してください。
 
 次のコマンドは、IAM の GetPolicy の API を呼び出して、修了証のポリシーの説明文を取得します。
 
@@ -248,14 +252,14 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 
 > **この手順で確かめること**
 > - **やること**: エラーメッセージを最後まで読み、`authorization-details/` の後ろの文字列を確認します。
-> - **期待する結果**: メッセージの中ほどに、拒否の理由として `with an explicit deny in an identity-based policy` があります。原因が管理ポリシーの場合は、その後ろに `: arn:aws:iam::<アカウント ID>:policy/aws-deepcuts-managed-deny` のような ARN が付きます。最後に、コンソールの URL と authorization ID があります。URL の末尾と authorization ID は、同じ文字列です。
+> - **期待する結果**: メッセージの中ほど、図の 4 の部分に、`with an explicit deny in an identity-based policy` があります。この部分は、IAM がリクエストを拒否した理由を、拒否したポリシーの種類で表します。この README では、この部分を拒否の理由と呼びます。拒否の理由の後ろには、拒否したポリシーの ARN が付くことがあります。管理ポリシー `aws-deepcuts-managed-deny` の ARN であれば、`: arn:aws:iam::<アカウント ID>:policy/aws-deepcuts-managed-deny` のような形です。最後に、コンソールの URL と authorization ID があります。URL の末尾と authorization ID は、同じ文字列です。
 > - **ここから分かること**: エラーメッセージで分かるのは、拒否したポリシーの種類と、多くても 1 つのポリシーの ARN です。インラインポリシーには ARN が無いため、ARN は付きません。ハンズオン用ロールには Deny のポリシーが 2 つありますが、2 つ目があることはメッセージからは分かりません。authorization ID は、拒否されたこのリクエストを識別する ID です。この ID を Access Troubleshooter で照会すると、評価の詳細を確認できます。
 
 ## ３．Access Troubleshooter で拒否の原因を調べる
 
 エラーメッセージの URL を、ブラウザで開きます。
 
-1. CloudShell で、エラーメッセージの `https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/...` の部分を選択してコピーします。
+1. CloudShell で、エラーメッセージの `https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/...` の部分を選択してコピーします。コピーするのは、`https://` から、URL の末尾にある authorization ID の最後の文字までです。URL の直後の `for complete details,` は含めません。
 2. 管理者としてマネジメントコンソールにサインインしているブラウザで、新しいタブを開き、URL を貼り付けて開きます。
 3. Access Troubleshooter の画面に、評価の詳細が表示されます。
 
@@ -263,7 +267,7 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 
 <!-- 画面写真: Access Troubleshooter の画面（ステージ 1）。判定・一致したポリシーとステートメント・評価されたポリシー・リクエストのコンテキストの 4 か所を番号つきの枠で囲む -->
 
-評価の詳細は、次の 4 つの項目からなります。図は、API で取得したときの JSON を、説明用に短くした例です。この README では、評価の詳細の項目を、API の応答の名前で説明します。コンソールの画面では、表示名が異なる場合があります。
+評価の詳細は、次の 4 つの項目からなります。図は、API で取得したときの JSON を、説明用に短くした例です。この README では、4 つの項目を、図の下の表の 1 列目の名前で呼びます。表の 2 列目は、図の JSON のキーです。コンソールの画面での表示名は、この README での呼び名と異なる場合があります。
 
 ![評価の詳細の 4 つの項目](img/response-anatomy.png)
 
@@ -272,15 +276,15 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 | リクエストのコンテキスト | `requestContext` | <!-- 撮影時に画面の表示名を記入 --> | 条件の評価に使われた値の一覧。ポリシーの Condition で使う条件キーと、その値の組で表される |
 | 判定 | `evaluations[].evaluatedEffect` | <!-- 撮影時に画面の表示名を記入 --> | アクションとリソースの組ごとの結果。許可を表す `ALLOW`、明示的な拒否を表す `EXPLICIT_DENY`、暗黙的な拒否を表す `IMPLICIT_DENY` のいずれか |
 | 一致したポリシー | `evaluations[].matchedPolicies` | <!-- 撮影時に画面の表示名を記入 --> | 評価で一致したポリシーと、ステートメントの Sid。API リファレンスによると、暗黙的な拒否では一致したポリシーは返らない |
-| 評価されたポリシー | `policies` | <!-- 撮影時に画面の表示名を記入 --> | 評価の対象になったすべてのポリシーと、その種類 |
+| 評価されたポリシー | `policies` | <!-- 撮影時に画面の表示名を記入 --> | 評価の対象になったすべてのポリシーと、その種類・インラインかどうか・アタッチされている先 |
 
-評価の詳細には、ポリシーの本文は含まれません。ステートメントの中身は、IAM コンソールでポリシーを開いて確認します。
+評価の詳細には、ポリシーの本文は含まれません。ステートメントは、IAM コンソールでポリシーを開き、JSON で表示される本文で確認します。
 
 判定によって、原因の探し方が変わります。
 
 ![判定ごとの原因の探し方](img/how-to-read.png)
 
-判定が `EXPLICIT_DENY` であれば、一致したポリシーの中の Deny のステートメントが原因です。判定が `IMPLICIT_DENY` であれば、評価の順序に沿って調べます。まず、評価された ID ベースポリシーの中に、その操作を許可する Allow のステートメントがあるかを、IAM コンソールでポリシーを開き、本文で確かめます。次に、その Allow のステートメントの Condition を、リクエストのコンテキストの値が満たしているかを確かめます。最後に、許可を絞るポリシーにも、その操作を許可する Allow のステートメントがあるかを確かめます。エラーメッセージの拒否の理由も、どの段階で拒否されたかを判断する根拠になります。
+判定が `EXPLICIT_DENY` であれば、一致したポリシーの中の Deny のステートメントが原因です。判定が `IMPLICIT_DENY` であれば、評価の順序に沿って調べます。まず、IAM コンソールで、評価された ID ベースポリシーを開きます。そして、その操作を許可する Allow のステートメントがあるかを、ポリシーの本文で確かめます。次に、その Allow のステートメントの Condition を、リクエストのコンテキストの値が満たしているかを確かめます。最後に、許可を絞るポリシーにも、その操作を許可する Allow のステートメントがあるかを確かめます。エラーメッセージの拒否の理由も、どの問いで拒否されたかを判断する手がかりになります。たとえば、拒否の理由が `because no identity-based policy allows` であれば問い 2 で、`because no permissions boundary allows` であれば問い 3 で、IAM はリクエストを拒否しています。
 
 <details>
 <summary>CLI で評価の詳細を取得する方法</summary>
@@ -291,7 +295,7 @@ Access Troubleshooter の画面で確認する評価の詳細を、API で取得
 aws iam-toolbox get-request-authorization-details --generate-cli-skeleton input > /dev/null 2>&1 && echo "OK: このまま進めます" || echo "NG: AWS CLI を更新してください"
 ```
 
-NG と表示された場合は、AWS CLI が古いため、次の手順でホームディレクトリに最新版をインストールします。CloudShell のホームディレクトリのファイルは、シェルが終了した後も残ります。インストールすると、ホームディレクトリの容量 1 GB のうち、約 280 MB を使います。
+NG と表示された場合は、AWS CLI が古いため、次の手順でホームディレクトリに最新版をインストールします。CloudShell のホームディレクトリに保存したファイルは、シェルが終了した後も残ります。そのため、インストールした AWS CLI は、削除するまでホームディレクトリの容量の一部を使い続けます。
 
 ```bash
 curl -sS https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
@@ -301,35 +305,47 @@ export PATH="$HOME/.local/bin:$PATH"
 aws --version
 ```
 
-`export PATH=...` の行は、CloudShell のタブを新しく開くたびに実行してください。
+`aws --version` の出力の先頭が `aws-cli/2.36.31` 以降の版であれば、インストールは成功です。最初の確認のコマンドをもう一度実行し、`OK: このまま進めます` と表示されることも確認します。`export PATH=...` の行は、CloudShell のタブを新しく開いたとき、またはシェルが終了したときに実行してください。
 
-ハンズオン用ロールには、この API を呼び出す権限が無いため、いったん管理者に戻ってから実行します。次の例の値を、自分のエラーメッセージの authorization ID に置き換えて実行します。
+ハンズオン用ロールには、この API を呼び出す権限が無いため、次のコマンドで、いったん管理者に戻ります。
 
 ```bash
 source ./switch-back.sh
+```
+
+次のコマンドで、評価の詳細を JSON で取得し、`explain.py` で整形して表示します。`AUTH_ID` の例の値は、自分のエラーメッセージの authorization ID に置き換えてから実行します。
+
+```bash
 AUTH_ID=0example1authorization2id   # 自分のエラーメッセージの authorization ID に置き換える
 aws iam-toolbox get-request-authorization-details --authorization-id "${AUTH_ID}" \
   --region us-east-1 --output json > authorization-details.json
 python3 explain.py authorization-details.json
-
-# 確認が終わったら、ハンズオン用ロールに戻る
-source ./switch-role.sh
 ```
 
-`explain.py` は、取得した JSON を整形し、最後に原因の候補を表示します。候補は、スクリプトが評価の詳細から推測したもので、AWS の応答には含まれません。
+`explain.py` は、取得した JSON を整形して表示します。最初にリクエストのコンテキストを表示し、次に評価ごとに、判定と一致したポリシーの後に `→ 原因の候補（スクリプトによる推測）` を表示します。最後に、評価されたポリシーの一覧を表示します。原因の候補は、スクリプトが評価の詳細から推測したもので、AWS の応答には含まれません。
+
+`ResourceNotFoundException` や `ValidationException` が表示された場合は、`AUTH_ID` に自分の authorization ID を設定したかを確認します。そのうえで、10 秒ほど待ってから、評価の詳細を取得するコマンドを、管理者のまま実行し直します。
+
+確認が終わったら、次のコマンドでハンズオン用ロールに戻ります。
+
+```bash
+source ./switch-role.sh
+```
 </details>
 
 ## ４．拒否を 1 つずつ解消する
 
 ステージごとに、Access Troubleshooter で原因を確かめてから、IAM コンソールで設定を修正します。修正したら、CloudShell で読み取りを試します。拒否されたら、新しいエラーメッセージの URL を開き、次のステージに進みます。authorization ID は、拒否のたびに新しく発行されます。
 
-> **Note**: AWS Organizations は、複数の AWS アカウントを 1 つの組織としてまとめて管理するサービスです。AWS Organizations の組織に属するアカウントでは、評価されたポリシーに、種類が `SERVICE_CONTROL_POLICY` のポリシーも表示されます。一致したポリシーに、SCP の Allow のステートメントが表示されることもあります。これは SCP が許可していることを示すもので、拒否の原因ではありません。
+読み取りを試す前に、プロンプトの先頭に `(handson-role)` が表示されていることを確かめてください。表示されていない場合は、`source ./switch-role.sh` を実行します。管理者のまま読み取りを試すと、管理者の権限で許可されるため、拒否の原因を解消していなくても修了証が表示されます。
+
+> **Note**: AWS Organizations の組織に属するアカウントでは、評価されたポリシーに、種類が `SERVICE_CONTROL_POLICY` のポリシーも表示されることがあります。第三者の実測報告では、判定が `EXPLICIT_DENY` のときに、一致したポリシーに SCP の Allow のステートメントも表示されていました。このハンズオンでは、判定が `EXPLICIT_DENY` になるステージ 1 と追加ステージで、同じように表示されることがあります。SCP の Allow のステートメントは、SCP がその操作を許可していることを示すもので、拒否の原因ではありません。
 
 ### ステージ 1：明示的な拒否
 
 > **このステージで確かめること**
-> - **やること**: 手順 3 で開いた評価の詳細で、判定と、一致したポリシーを確認します。
-> - **期待する結果**: 判定は `EXPLICIT_DENY` です。一致したポリシーに、Deny のステートメントが表示されています。管理ポリシー `aws-deepcuts-managed-deny` の Sid `DenyReadCertificate` は、ポリシーの ARN と一緒に表示されます。インラインポリシー `aws-deepcuts-inline-deny` は ARN を持たないため、名前ではなく、`inline:` で始まる識別子で表示されます。Sid が `DenyReadCertificateInline` であることと、アタッチ先がハンズオン用ロールであることから、`aws-deepcuts-inline-deny` だと判断します。
+> - **やること**: 手順 3 で開いた評価の詳細で、判定・一致したポリシー・評価されたポリシーを確認します。
+> - **期待する結果**: 判定は `EXPLICIT_DENY` です。一致したポリシーに、Deny のステートメントが 1 つか 2 つ表示されます。管理ポリシー `aws-deepcuts-managed-deny` が表示される場合は、Sid `DenyReadCertificate` が、ポリシーの ARN と一緒に表示されます。インラインポリシー `aws-deepcuts-inline-deny` は ARN を持たないため、API の応答では、名前の代わりに識別子で表されます。API リファレンスの例と第三者の観測では、この識別子は `inline:` で始まります。名前が表示されない場合も、Sid が `DenyReadCertificateInline` であれば、そのステートメントは、手順 1 の表のとおり `aws-deepcuts-inline-deny` のステートメントです。評価されたポリシーで同じ識別子のポリシーを探すと、インラインポリシーであることと、アタッチされている先がハンズオン用ロールであることも確認できます。
 > - **ここから分かること**: IAM は、最初に Deny のステートメントを探します。一致する Deny が 1 つでもあれば、他にどんな Allow があってもリクエストを拒否します。Access Troubleshooter は、原因になったポリシーとステートメントを、Sid まで特定します。
 
 評価の詳細から分かった原因を、ロールの設定の図で確かめます。
@@ -341,7 +357,7 @@ source ./switch-role.sh
 **IAM コンソールで修正する手順**
 
 1. IAM コンソールの左のメニューで「ロール」を選び、`aws-deepcuts-handson-role` を開きます。
-2. 「許可」タブの許可ポリシーの一覧で、`aws-deepcuts-inline-deny` と `aws-deepcuts-managed-deny` にチェックを入れ、「削除」を選びます。
+2. 「許可」タブの「許可ポリシー」の一覧で、`aws-deepcuts-inline-deny` と `aws-deepcuts-managed-deny` にチェックを入れ、「削除」を選びます。
 3. 確認の画面で、削除を確定します。
 
 インラインポリシーは、ロールの中に直接書き込まれたポリシーです。ロールから削除すると、ポリシーそのものが無くなります。ロールは残ります。管理ポリシーは、ロールからデタッチされるだけです。管理ポリシー `aws-deepcuts-managed-deny` そのものは、後片付けまで残ります。
@@ -349,7 +365,9 @@ source ./switch-role.sh
 <!-- 画面写真: 「許可」タブで 2 つのポリシーにチェックを入れ、「削除」ボタンを枠で囲む -->
 
 <details>
-<summary>CLI で修正する方法</summary>
+<summary>IAM コンソールの代わりに CLI で修正する方法</summary>
+
+IAM コンソールで修正した場合は、このコマンドを実行しません。
 
 ```bash
 source ./switch-back.sh
@@ -367,11 +385,11 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 
 拒否されたら、新しいエラーメッセージの URL を開き、ステージ 2 に進みます。
 
-### ステージ 2：許可するポリシーが無い
+### ステージ 2：許可の不足
 
 > **このステージで確かめること**
 > - **やること**: ステージ 1 の修正の後に表示されたエラーメッセージと、その URL で開いた評価の詳細で、拒否の理由・判定・一致したポリシー・評価されたポリシーを確認します。
-> - **期待する結果**: エラーメッセージの拒否の理由は `because no identity-based policy allows the iam:GetPolicy action` です。判定は `IMPLICIT_DENY` で、一致したポリシーは空です。評価されたポリシーの一覧に、ID ベースポリシー（`IDENTITY_BASED_POLICY`）が 1 つもありません。評価されたポリシーの一覧には、手順 1 から設定されているアクセス許可の境界 `aws-deepcuts-boundary` が表示されることもあります。エラーメッセージの理由が `no identity-based policy allows` の間は、境界はまだ原因ではありません。境界はステージ 4 で扱います。
+> - **期待する結果**: エラーメッセージの拒否の理由は `because no identity-based policy allows the iam:GetPolicy action` です。判定は `IMPLICIT_DENY` で、一致したポリシーは空です。評価されたポリシーの一覧に、ID ベースポリシー（`IDENTITY_BASED_POLICY`）が 1 つもありません。評価されたポリシーの一覧には、手順 1 から設定されているアクセス許可の境界 `aws-deepcuts-boundary` が表示されることもあります。この境界も `iam:GetPolicy` を許可していません。ただし、拒否の理由が `no identity-based policy allows` の間は、IAM は問い 2 でリクエストを拒否しているため、境界による拒否は、拒否の理由として表示されません。境界はステージ 4 で扱います。
 > - **ここから分かること**: Deny が無くなっても、Allow が無ければ、IAM はリクエストを拒否します。これが暗黙的な拒否です。暗黙的な拒否では、一致したポリシーが空になるため、評価の詳細には原因のポリシーが表示されません。代わりに、評価されたポリシーの一覧を確認し、どの種類のポリシーが足りないかを考えます。このステージでは、評価されたポリシーの一覧に ID ベースポリシーが 1 つも無いことから、読み取りを許可するポリシーが無いことが分かります。
 
 評価の詳細から分かった原因を、ロールの設定の図で確かめます。
@@ -386,7 +404,9 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 <!-- 画面写真: ポリシーのアタッチの画面。検索欄と aws-deepcuts-read-certificate のチェックボックスを枠で囲む -->
 
 <details>
-<summary>CLI で修正する方法</summary>
+<summary>IAM コンソールの代わりに CLI で修正する方法</summary>
+
+IAM コンソールで修正した場合は、このコマンドを実行しません。
 
 ```bash
 source ./switch-back.sh
@@ -403,12 +423,12 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 
 拒否されたら、新しいエラーメッセージの URL を開き、ステージ 3 に進みます。
 
-### ステージ 3：条件を満たしていない
+### ステージ 3：条件の不一致
 
 > **このステージで確かめること**
-> - **やること**: ステージ 2 の修正の後に表示されたエラーメッセージと、その URL で開いた評価の詳細で、拒否の理由・判定・評価されたポリシー・リクエストのコンテキストを確認します。次に、IAM コンソールの左のメニューの「ポリシー」で `aws-deepcuts-read-certificate` を開き、ポリシーの JSON で `Condition` を確認します。
-> - **期待する結果**: エラーメッセージの拒否の理由は、ステージ 2 と同じ `because no identity-based policy allows the iam:GetPolicy action` です。判定は `IMPLICIT_DENY` のままです。評価されたポリシーの一覧に、ステージ 2 でアタッチした `aws-deepcuts-read-certificate` があります。それでも、一致したポリシーは空です。ポリシーの JSON の `Condition` は `"StringEquals": {"aws:PrincipalTag/team": "security"}` です。リクエストのコンテキストに、ロールのタグを表すキー `aws:PrincipalTag/team` があり、値は `dev` です。リクエストのコンテキストに表示されない場合は、IAM コンソールのロールの「タグ」タブで値を確認してください。
-> - **ここから分かること**: ステートメントの `Condition` を満たさないと、そのステートメントはリクエストに一致しません。そのため、Allow のステートメントがあっても、リクエストは許可されません。拒否の理由がステージ 2 と同じなのも、一致する Allow が無いという点で同じだからです。`aws:PrincipalTag/team` は、リクエストを送ったプリンシパル、ここではハンズオン用ロールの、タグ `team` の値を表す条件キーです。条件が関係する拒否では、ポリシーの条件と、リクエストのコンテキストの値を照らし合わせます。
+> - **やること**: ステージ 2 の修正の後に表示されたエラーメッセージと、その URL で開いた評価の詳細で、拒否の理由・判定・評価されたポリシー・リクエストのコンテキストを確認します。次に、IAM コンソールの左のメニューで「ポリシー」を選び、検索欄に `aws-deepcuts-read-certificate` と入力して、表示されたポリシーの名前を選びます。開いたポリシーの JSON で、`Condition` を確認します。
+> - **期待する結果**: エラーメッセージの拒否の理由は、ステージ 2 と同じ `because no identity-based policy allows the iam:GetPolicy action` です。判定は `IMPLICIT_DENY` のままです。評価されたポリシーの一覧に、ステージ 2 でアタッチした `aws-deepcuts-read-certificate` があります。それでも、一致したポリシーは空です。ポリシーの JSON の `Condition` は `"StringEquals": {"aws:PrincipalTag/team": "security"}` です。リクエストのコンテキストに、ロールのタグを表すキー `aws:PrincipalTag/team` が表示される場合は、値が `dev` です。表示されない場合は、IAM コンソールのロールの「タグ」タブで値を確認してください。
+> - **ここから分かること**: ステートメントの `Condition` を満たさないと、そのステートメントはリクエストに一致しません。そのため、Allow のステートメントがあっても、リクエストは許可されません。拒否の理由がステージ 2 と同じなのは、どちらのステージでも、ID ベースポリシーに一致する Allow のステートメントが無いためです。`aws:PrincipalTag/team` は、リクエストを送ったプリンシパルのタグ `team` の値を表す条件キーです。このハンズオンでは、リクエストを送ったプリンシパルはハンズオン用ロールです。条件が関係する拒否では、ポリシーの条件と、リクエストのコンテキストの値を照らし合わせます。
 
 <!-- 画面写真: IAM コンソールの aws-deepcuts-read-certificate の「許可」タブの JSON。Condition の行を枠で囲む -->
 
@@ -424,7 +444,9 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 <!-- 画面写真: 「タグ」タブの編集画面。team の値の入力欄を枠で囲む -->
 
 <details>
-<summary>CLI で修正する方法</summary>
+<summary>IAM コンソールの代わりに CLI で修正する方法</summary>
+
+IAM コンソールで修正した場合は、このコマンドを実行しません。
 
 ```bash
 source ./switch-back.sh
@@ -442,12 +464,12 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 
 拒否されたら、新しいエラーメッセージの URL を開き、ステージ 4 に進みます。
 
-### ステージ 4：アクセス許可の境界
+### ステージ 4：アクセス許可の境界による拒否
 
 > **このステージで確かめること**
 > - **やること**: ステージ 3 の修正の後に表示されたエラーメッセージと、その URL で開いた評価の詳細で、拒否の理由・判定・評価されたポリシー・リクエストのコンテキストを確認します。
-> - **期待する結果**: エラーメッセージの拒否の理由が `because no permissions boundary allows the iam:GetPolicy action` に変わっています。判定は `IMPLICIT_DENY` です。評価されたポリシーの一覧は、ステージ 3 と同じです。リクエストのコンテキストの `aws:PrincipalTag/team` は `security` になり、Allow の条件を満たしています。
-> - **ここから分かること**: ID ベースポリシーが Allow していても、アクセス許可の境界が Allow していなければ、IAM はリクエストを拒否します。アクセス許可の境界は、事前準備のときからロールに設定されていました。ステージ 1 では Deny のステートメントで、ステージ 2・3 では ID ベースポリシーに一致する Allow が無いことで、先に拒否されていたため、エラーメッセージの理由には表示されませんでした。暗黙的な拒否では一致したポリシーが空になるため、評価の詳細は、境界を原因として表示しません。評価されたポリシーの一覧と、エラーメッセージの理由を組み合わせて判断します。
+> - **期待する結果**: エラーメッセージの拒否の理由が `because no permissions boundary allows the iam:GetPolicy action` に変わっています。判定は `IMPLICIT_DENY` です。評価されたポリシーの一覧に `aws-deepcuts-boundary` があり、その種類はアクセス許可の境界を表す `PERMISSIONS_BOUNDARY` です。リクエストのコンテキストに `aws:PrincipalTag/team` が表示される場合は、値が `security` に変わり、`aws-deepcuts-read-certificate` の `Condition` を満たしています。表示されない場合は、IAM コンソールのロールの「タグ」タブで値を確認してください。
+> - **ここから分かること**: ID ベースポリシーが Allow していても、アクセス許可の境界が Allow していなければ、IAM はリクエストを拒否します。アクセス許可の境界は、事前準備のときからロールに設定されていました。ステージ 1〜3 では、IAM は、境界を確かめる問い 3 より前の問いで、リクエストを拒否していました。ステージ 1 では Deny のステートメントに一致したため、ステージ 2・3 では ID ベースポリシーに一致する Allow のステートメントが無かったためです。そのため、境界による拒否は、エラーメッセージの拒否の理由に表示されませんでした。暗黙的な拒否では一致したポリシーが空になるため、評価の詳細には、境界が原因として表示されません。境界が原因であることは、評価されたポリシーの一覧と、エラーメッセージの拒否の理由を組み合わせて判断します。
 
 評価の詳細から分かった原因を、ロールの設定の図で確かめます。
 
@@ -455,7 +477,7 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 
 **IAM コンソールで修正する手順**
 
-1. IAM コンソールの左のメニューで「ポリシー」を選び、`aws-deepcuts-boundary` を開きます。
+1. IAM コンソールの左のメニューで「ポリシー」を選び、検索欄に `aws-deepcuts-boundary` と入力して、表示されたポリシーの名前を選びます。
 2. 「編集」を選び、ポリシーエディタで「JSON」を選びます。
 3. `"Action"` の配列に `"iam:GetPolicy"` を追加します。
 
@@ -467,10 +489,12 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 
 <!-- 画面写真: ポリシーエディタの JSON の画面。追加した "iam:GetPolicy" の行を枠で囲む -->
 
-ロールの「許可」タブで、アクセス許可の境界そのものを削除しても、このステージはクリアできます。
+ロールの「許可」タブで、ロールからアクセス許可の境界の設定を削除しても、このステージの拒否は解消できます。この操作では、ポリシー `aws-deepcuts-boundary` そのものは削除されず、後片付けまで残ります。
 
 <details>
-<summary>CLI で修正する方法</summary>
+<summary>IAM コンソールの代わりに CLI で修正する方法</summary>
+
+IAM コンソールで修正した場合は、このコマンドを実行しません。
 
 ```bash
 source ./switch-back.sh
@@ -489,16 +513,16 @@ source ./switch-role.sh
 
 ## ５．修了証を読み取る
 
-4 つのステージをクリアしたら、もう一度読み取りを試します。
+4 つのステージをクリアしたら、プロンプトの先頭に `(handson-role)` が表示されていることを確かめてから、もう一度読み取りを試します。
 
 ```bash
 aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --output text
 ```
 
-修了証が表示されたら、ハンズオンのクリアです。次は出力の形の例です。アカウント ID と日付は、環境ごとに異なります。`setup.sh` の実行時に「日本語の説明文が受け付けられなかったため、英語の修了証で作成します。」と表示された場合は、`[Certificate]` で始まる英語の修了証が表示されます。
+プロンプトの先頭に `(handson-role)` が表示されている状態で修了証が表示されたら、ハンズオンのクリアです。管理者のまま実行して表示された修了証は、拒否の原因を解消した結果ではありません。次は出力の形の例です。アカウント ID と日付は、環境ごとに異なります。`setup.sh` の実行時に「日本語の説明文が受け付けられなかったため、英語の修了証で作成します。」と表示された場合は、`[Certificate]` で始まる英語の修了証が表示されます。
 
 ```text
-[修了証] AWS Deep Cuts IAM Access Troubleshooter ハンズオン - あなたは、明示的な拒否・許可の不足・条件の不一致・アクセス許可の境界による 4 種類の拒否の原因を、authorization ID と IAM Access Troubleshooter で特定し、このポリシーの説明文を読み取りました。発行: アカウント 123456789012 / 2026-10-29。AccessDenied のエラーが出たら、まずメッセージの最後にある authorization ID を探してください。
+[修了証] AWS Deep Cuts IAM Access Troubleshooter ハンズオン - あなたは、明示的な拒否・許可の不足・条件の不一致・アクセス許可の境界による 4 種類の拒否の原因を、authorization ID と IAM Access Troubleshooter で特定し、このポリシーの説明文を読み取りました。発行: アカウント 111122223333 / 2026-10-29。AccessDenied のエラーが出たら、まずメッセージの最後にある authorization ID を探してください。
 ```
 
 ### 任意の追加ステージ：セッションポリシー
@@ -515,9 +539,9 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 ```
 
 > **このステージで確かめること**
-> - **やること**: エラーメッセージと、その URL で開いた評価の詳細の一致したポリシーを確認します。
-> - **期待する結果**: エラーメッセージの拒否の理由は `with an explicit deny in a session policy` です。評価の詳細の判定は `EXPLICIT_DENY` で、一致したポリシーの種類はセッションポリシー（`SESSION_POLICY`）、Sid は `DenyReadCertificateInSession` です。
-> - **ここから分かること**: セッションポリシーは、ロールのどのポリシーにも書かれていないため、IAM コンソールでロールを確認しても見つかりません。Access Troubleshooter では、ポリシーの種類と Sid から、セッションポリシーが原因だと分かります。
+> - **やること**: エラーメッセージと、その URL で開いた評価の詳細で、拒否の理由・判定・一致したポリシー・評価されたポリシーを確認します。
+> - **期待する結果**: エラーメッセージの拒否の理由は `with an explicit deny in a session policy` です。評価の詳細の判定は `EXPLICIT_DENY` です。一致したポリシーに、Sid が `DenyReadCertificateInSession` の Deny のステートメントがあります。評価されたポリシーで同じ識別子のポリシーを探すと、種類はセッションポリシーを表す `SESSION_POLICY` です。
+> - **ここから分かること**: セッションポリシーは、ロールに設定されたポリシーではなく、`switch-role.sh` がロールに切り替えるときに渡したポリシーです。そのため、IAM コンソールでロールを確認しても見つかりません。Access Troubleshooter では、ポリシーの種類と Sid から、セッションポリシーが原因だと分かります。
 
 `--session-policy` を付けずに `source ./switch-role.sh` を実行すると、セッションポリシーの無い状態に戻ります。これで、すべてのステージが終わりました。お疲れさまでした！
 
@@ -543,7 +567,7 @@ cd ~
 sudo rm -rf aws-iam-toolbox
 ```
 
-AWS CLI をホームディレクトリにインストールした場合は、次のコマンドで削除します。削除しないと、CloudShell の AWS CLI が更新された後も、インストールした版が使われ続けます。
+AWS CLI をホームディレクトリにインストールした場合は、次のコマンドで削除します。インストールした AWS CLI は、削除するまでホームディレクトリの容量の一部を使い続けます。また、PATH に `$HOME/.local/bin` を追加したシェルでは、CloudShell の AWS CLI が更新された後も、インストールした版が使われます。
 
 ```bash
 rm -rf ~/.local/aws-cli ~/.local/bin/aws ~/.local/bin/aws_completer
@@ -555,14 +579,17 @@ rm -rf ~/.local/aws-cli ~/.local/bin/aws ~/.local/bin/aws_completer
 | -- | -- | -- |
 | `Found invalid choice 'iam-toolbox'`、または `Invalid choice` | AWS CLI が v2.36.31 より古い | 手順 3 の「CLI で評価の詳細を取得する方法」の手順で、AWS CLI の最新版をインストールする |
 | `setup.sh` が `ルートユーザーで実行しています` で止まる | ルートユーザーでサインインしている | IAM ユーザーまたは IAM Identity Center のユーザーでサインインし直す |
+| `setup.sh` が `前回の環境が残っています` で止まる | 前回の `setup.sh` が途中で失敗したか、前回の後片付けをしていない | `bash ./cleanup.sh` を実行してから、もう一度 `bash ./setup.sh` を実行する |
 | `source ./switch-role.sh` が失敗する | `sts:AssumeRole` の権限が無い、またはロールの作成直後で反映が間に合っていない | 権限を確認する。10〜20 秒待ってから再実行する |
-| `./switch-role.sh: No such file or directory` | hands-on ディレクトリにいない | `cd ~/aws-iam-toolbox/hands-on` を実行する |
+| `./switch-role.sh: No such file or directory` | hands-on ディレクトリにいない、または `setup.sh` を実行したときとは別のリージョンで CloudShell を開いている | CloudShell のリージョンがバージニア北部（us-east-1）であることを確認してから、`cd ~/aws-iam-toolbox/hands-on` を実行する |
 | `ExpiredToken` | ハンズオン用ロールに切り替えてから 1 時間が過ぎた | `source ./switch-role.sh` を実行する |
 | `Invalid length for parameter PolicyArn, value: 0` | CloudShell のシェルが終了したか、新しいタブを開いたため、変数が消えた | `cd ~/aws-iam-toolbox/hands-on` と `source ./switch-role.sh` を実行する |
-| 修正したのに、同じ理由で拒否される | IAM の変更の反映が間に合っていない。ステージ 3 では、ステージ 2 と同じ理由が表示される | 10 秒ほど待ってから再実行する。評価の詳細の評価されたポリシーの一覧に修正したポリシーが表示されていれば、修正は反映されている。タグを変更した場合は `source ./switch-role.sh` で切り替え直す |
+| 修正したのに、同じ理由で拒否される | IAM の変更の反映が間に合っていない | 10 秒ほど待ってから再実行する。タグを変更した場合は、`source ./switch-role.sh` で切り替え直す。それでも拒否される場合は、新しいエラーメッセージの URL で評価の詳細を開き、評価されたポリシーの一覧を確認する。ステージ 1 の削除は、削除したポリシーが一覧から消えていれば反映されている。ステージ 2 のアタッチは、アタッチしたポリシーが一覧にあれば反映されている。ステージ 4 の編集は、ポリシーの本文が評価の詳細に含まれないため、IAM コンソールでポリシーの JSON を確認する |
+| ステージ 3 で、ステージ 2 と同じ理由で拒否される | 条件を満たさない拒否も、一致する Allow が無い拒否として表示される。正常な動作である | ステージ 3 の「このステージで確かめること」に進む |
 | エラーメッセージに authorization ID が無い | 2026 年 10 月時点で、authorization ID は保証されていない | `aws iam get-policy` で読み取りを試しているかを確認する。もう一度読み取りを試し、新しいエラーメッセージを確認する |
 | Access Troubleshooter の画面に評価の詳細が表示されない | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、または `us-east-1` 以外の画面を開いている | 10 秒ほど待って再読み込みする。URL の `region=us-east-1` を確認する。もう一度読み取りを試して、新しい authorization ID で開く |
 | `get-request-authorization-details` が `AccessDeniedException` になる | ハンズオン用ロールのまま照会している | `source ./switch-back.sh` で管理者に戻ってから実行する |
+| `get-request-authorization-details` が `ResourceNotFoundException` または `ValidationException` になる | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、`AUTH_ID` が自分の authorization ID になっていない、または `us-east-1` 以外で照会している | `AUTH_ID` と `--region us-east-1` を確認し、10 秒ほど待ってから、管理者のまま再実行する。解決しない場合は、もう一度読み取りを試して、新しい authorization ID で照会する |
 | `cleanup.sh` が `ハンズオン用ロールに切り替えたままです` で止まる | 環境変数にハンズオン用ロールの認証情報が残っている | `source ./switch-back.sh` を実行してから再実行する |
 
 ## 参考リンク
