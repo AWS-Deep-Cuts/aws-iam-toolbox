@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- ステージ 3 の原因（README 手順 4）。aws-deepcuts-read-certificate の Allow には条件 aws:PrincipalTag/team = security（StringEquals）がある。
+     ロールのタグ team の値は dev のため条件を満たさず、暗黙的な拒否（IMPLICIT_DENY）になる。
+     修正: ロールの「タグ」タブで team の値を security に変更し（TagRole）、CloudShell でロールに切り替え直す。
+     中身は role-layers.js（role-layers・stage-1〜stage-4 で共通の枠組み。body の data-mode で描き分ける）。
+     根拠: hands-on/setup.sh（ロール・ポリシー・Sid・タグ・アクセス許可の境界）、DESIGN-v3-iam.md の「ステージ」の表、README の各ステージの修正の手順。
+     アイコン: npm パッケージ aws-icons（AWSIdentityAccessManagementRole, AWSIdentityAccessManagementPermissions） -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+</head><body data-mode="stage-3">
+<div id="fig"><svg id="wires"></svg></div>
+<script src="role-layers.js"></script>
+</body></html>

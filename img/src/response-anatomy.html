@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- GetRequestAuthorizationDetails の応答の 4 つの部分（記事の「仕組み」・README 手順 3）。
+     JSON は説明用に短くした例。値はハンズオンのステージ 1（明示的な拒否）を想定し、ARN の前半を「…」で省略した。
+     構造の根拠: botocore のモデル iam-toolbox/2018-05-10/service-2.json の GetRequestAuthorizationDetailsOutput
+       - requestContext: map。「リクエスト全体に共通し、すべての評価で共有される条件キーと値」
+       - evaluations[]: Evaluation { action, resource, context, evaluatedEffect (ALLOW | EXPLICIT_DENY | IMPLICIT_DENY), matchedPolicies[] }
+         「1 つのアクションとリソースの組をどう評価したか」
+       - evaluations[].matchedPolicies[]: MatchedPolicy { uri, matchedStatements[] { sid, evaluatedEffect (ALLOW | DENY) } }
+         「An implicit denial produces no matched policies.」
+       - policies[]: PolicyInfo { type, inline, uri, attachedTo[] }「評価されたポリシーの一覧」
+     requestContext のキー: aws:RequestedRegion と aws:SecureTransport（文字列 "true"）は API リファレンスのサンプルの応答にある。
+     aws:PrincipalTag/team は設計書（DESIGN-v3-iam.md）の例。実際の応答に含まれるかは、ハンズオンのステージ 3 で確かめる。 -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 666px; }
+  .card { left: 0; top: 0; width: 436px; }
+  .card > .h { display: flex; align-items: center; gap: 10px; padding: 7px 12px; }
+  .card > .h img { width: 28px; height: 28px; }
+  .card > pre { line-height: 1.45; padding: 10px 12px 12px; }
+  .card > pre strong { font-weight: 800; }
+
+  /* 注釈: 番号・画面での呼び名・JSON のキー・説明 */
+  .co { position: absolute; left: 486px; width: 314px; display: grid; grid-template-columns: 26px 1fr; column-gap: 9px; }
+  .co > i { grid-row: span 3; align-self: start; height: 26px; display: flex; align-items: center; justify-content: center;
+    font-style: normal; font-family: var(--font-mono); font-weight: 800; font-size: 16px; background: var(--ink); color: #fff; }
+  .co > b { font-size: 18px; font-weight: 900; line-height: 26px; }
+  .co > code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; line-height: 1.5; color: var(--grey); }
+  .co > span { font-size: 16px; font-weight: 500; line-height: 1.45; }
+  .co.hot > i { background: var(--hot); }
+  .co.hot > b { color: var(--hot); }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+  <div class="card" id="json" data-chk="1">
+    <div class="h"><img src="../icons/AWSIdentityandAccessManagement.svg">API の応答 ・ 説明用に短くした例</div>
+<pre>{
+  <span id="r1"><strong>"requestContext"</strong>: {
+    "aws:RequestedRegion": "us-east-1",
+    "aws:SecureTransport": "true",
+    "aws:PrincipalTag/team": "dev"
+  },</span>
+  <span id="r2"><strong>"evaluations"</strong>: [ {
+    "action": "iam:GetPolicy",
+    "resource": "<i>…</i>/aws-deepcuts-certificate",
+    "evaluatedEffect": <strong>"EXPLICIT_DENY"</strong>,</span>
+    <span id="r3"><strong>"matchedPolicies"</strong>: [ {
+      "uri": "<i>…</i>/aws-deepcuts-managed-deny",
+      "matchedStatements": [ {
+        "sid": <b>"DenyReadCertificate"</b>,
+        "evaluatedEffect": <b>"DENY"</b>
+      } ]
+    } ]</span>
+  } ],
+  <span id="r4"><strong>"policies"</strong>: [
+    { "type": <strong>"IDENTITY_BASED_POLICY"</strong>,
+      "inline": false,
+      "uri": "<i>…</i>/aws-deepcuts-managed-deny" },
+    { "type": <strong>"PERMISSIONS_BOUNDARY"</strong>,
+      "inline": false,
+      "uri": "<i>…</i>/aws-deepcuts-boundary" }
+  ]</span>
+}</pre>
+  </div>
+
+  <div class="co" id="c1" data-chk="1"><i>1</i><b>リクエストのコンテキスト</b><code>requestContext</code><span>リクエスト全体の条件キーの値</span></div>
+  <div class="co" id="c2" data-chk="1"><i>2</i><b>判定</b><code>evaluations[].evaluatedEffect</code><span>アクションとリソースの組ごとの判定</span></div>
+  <div class="co hot" id="c3" data-chk="1"><i>3</i><b>一致したポリシー</b><code>matchedPolicies</code><span>一致したポリシーとステートメント。<br>暗黙的な拒否では空になる</span></div>
+  <div class="co" id="c4" data-chk="1"><i>4</i><b>評価されたポリシー</b><code>policies</code><span>評価されたすべてのポリシーと、<br>その種類</span></div>
+</div>
+<script>
+// 線を引く（wires.js と同じ太さと色）。点は [x, y] の配列
+function path(pts, hot) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  p.setAttribute('points', pts.map((q) => q.join(',')).join(' '));
+  p.setAttribute('fill', 'none'); p.setAttribute('stroke', hot ? '#ff4d00' : '#0c0c0c'); p.setAttribute('stroke-width', '2.5');
+  document.getElementById('wires').appendChild(p);
+}
+window.addEventListener('load', async () => {
+  await document.fonts.ready;
+  const F = document.getElementById('fig').getBoundingClientRect();
+  const card = document.getElementById('json').getBoundingClientRect();
+  const X = card.right - F.left + 14;          // 括弧の縦線の位置
+  for (const n of [1, 2, 3, 4]) {
+    // 部分の最初の行と最後の行の、縦の中心
+    const rows = [...document.getElementById('r' + n).getClientRects()].filter((q) => q.width > 0);
+    const c = (q) => Math.round(q.top + q.height / 2 - F.top);
+    const top = c(rows[0]), bottom = c(rows[rows.length - 1]);
+    const co = document.getElementById('c' + n);
+    const hot = co.classList.contains('hot');
+    // 括弧で部分の範囲を示し、括弧の上端から注釈の番号まで線を引く。注釈は部分の最初の行の高さに置く
+    co.style.top = (top - 13) + 'px';
+    path([[X - 8, bottom], [X, bottom], [X, top], [co.offsetLeft - 4, top]], hot);
+    path([[X - 8, top], [X, top]], hot);
+  }
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- 拒否されてから、評価の詳細を照会するまで（記事の「IAM Access Troubleshooter とは？」）。
+     3 つの枠: 拒否されるプリンシパル（灰色の点線）、IAM が自動で行う処理（差し色の点線）、管理者（灰色の点線）。
+     1 プリンシパルが API を呼ぶ → 2 IAM がポリシーを評価し、拒否する → 3 エラーメッセージに authorization ID とコンソールへのリンクを付けて返す。
+     2 と同時に 4 評価の詳細を 24 時間保持する → 5 管理者が ID で照会する → 6 評価の詳細が返る。
+     根拠:
+       - 3: エラーメッセージの末尾「Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID> for complete details,
+         or call the GetRequestAuthorizationDetails API with the following authorization id: <ID>」（公開されている CI のログ。ファクトシート R1-7 ほか）。
+         ID が付くのは対応している API だけで、付かない場合もある（IAM User Guide「Troubleshoot access denied error messages with authorization ID (Preview)」、ファクトシート 057）。
+       - 4: 「Authorization details are available for at least 24 hours after the denial.」（API モデル）、User Guide は「24 hours」（ファクトシート 055）。
+         GetRequestAuthorizationDetails はリージョンごとの API で、拒否が起きたリージョンで呼ぶ（ファクトシート 012）。プレビューは us-east-1（ファクトシート 007）。
+       - 5: 「To use this operation, you must have the iam:GetRequestAuthorizationDetails permission.」（API モデル、ファクトシート 018）。
+       - 6: 応答の requestContext・evaluations（evaluatedEffect と matchedPolicies の matchedStatements）・policies（botocore iam-toolbox service-2.json、ファクトシート 024・032〜050）。 -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+<style>
+  #fig { width: 800px; height: 644px; }
+  .lane { left: 0; width: 800px; }
+
+  /* 手順の箱：番号・題・説明 */
+  .sb { position: absolute; border: 3px solid var(--ink); background: #fff; padding: 9px 12px; display: flex; gap: 10px; }
+  .sb.hot { border-color: var(--hot); border-width: 4px; padding: 8px 11px; }
+  .sb > i { font-style: normal; font-family: var(--font-mono); font-weight: 800; font-size: 20px; color: var(--hot); line-height: 27px; width: 14px; flex: none; }
+  .sb > div > b { display: block; font-size: 19px; font-weight: 900; line-height: 27px; white-space: nowrap; }
+  .sb > div > span { display: block; margin-top: 4px; font-size: 16px; font-weight: 500; line-height: 1.45; white-space: nowrap; }
+  .sb code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
+  .sb em { font-style: normal; font-weight: 900; color: var(--hot); }
+  .sb ul { margin: 4px 0 0; padding: 0 0 0 1.1em; font-size: 16px; font-weight: 500; line-height: 1.45; white-space: nowrap; }
+
+  .lbl.k { color: var(--ink); font-weight: 900; }
+</style>
+</head><body>
+<div id="fig">
+  <svg id="wires"></svg>
+
+  <div class="lane" style="top:0;height:132px"><span class="lt">拒否されるプリンシパル</span></div>
+  <div class="lane aws" style="top:146px;height:276px"><span class="lt">IAM が自動で行う処理</span></div>
+  <div class="lane" style="top:436px;height:208px"><span class="lt">管理者</span></div>
+
+  <!-- 拒否されるプリンシパル -->
+  <div class="sb" id="s1" data-self="1" style="left:16px;top:42px;width:362px"><i>1</i><div>
+    <b>API を呼ぶ</b><span>例: <code>iam:GetPolicy</code></span></div></div>
+
+  <!-- IAM が自動で行う処理 -->
+  <div class="sb" id="s2" data-self="1" style="left:16px;top:211px;width:362px"><i>2</i><div>
+    <b>ポリシーを評価し、拒否する</b></div></div>
+  <div class="sb" id="s3" data-self="1" style="left:440px;top:186px;width:340px"><i>3</i><div>
+    <b>エラーメッセージを返す</b><span><em>authorization ID</em> と<br>コンソールへのリンクを付ける</span></div></div>
+  <div class="sb hot" id="s4" data-self="1" style="left:16px;top:306px;width:362px"><i>4</i><div>
+    <b>評価の詳細を 24 時間保持する</b><span>拒否が起きたリージョンに保持<br>プレビュー中は <code>us-east-1</code></span></div></div>
+
+  <!-- 管理者 -->
+  <div class="sb" id="s5" data-self="1" style="left:16px;top:482px;width:362px"><i>5</i><div>
+    <b>ID で照会する</b><span>コンソールのリンク、または API<br><code>GetRequestAuthorizationDetails</code><br>必要な権限<br><code>iam:GetRequestAuthorizationDetails</code></span></div></div>
+  <div class="sb" id="s6" data-self="1" style="left:440px;top:482px;width:340px"><i>6</i><div>
+    <b>評価の詳細</b><ul><li>判定</li><li>一致したポリシーとステートメント</li><li>評価されたポリシー</li><li>リクエストのコンテキスト</li></ul></div></div>
+
+  <div class="lbl k" style="left:207px;top:270px">同時に</div>
+</div>
+<script>
+window.addEventListener('load', async () => { await document.fonts.ready;
+  wire('#s1', '#s2', {from: 'b', to: 't'});                          // 1 → 2：API を呼ぶ
+  wire('#s2', '#s3', {});                                            // 2 → 3
+  wire('#s3', '#s1', {from: 't', to: 'r', elbow: 'v'});              // 3 → 1：エラーメッセージが返る
+  wire('#s2', '#s4', {from: 'b', to: 't'});                          // 2 と同時に 4
+  wire('#s5', '#s4', {from: 't', to: 'b'});                          // 5 → 4：ID で照会する
+  wire('#s4', '#s6', {from: 'r', to: 't', elbow: 'h'});              // 4 → 6：評価の詳細が返る
+  document.body.dataset.ready = '1';
+});
+</script>
+</body></html>

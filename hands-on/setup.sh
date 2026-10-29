@@ -2,144 +2,157 @@
 set -euo pipefail
 export AWS_PAGER=""
 
-# IAM 脱出ゲーム — 金庫（IAM ポリシー）と 5 つの鍵（拒否）を仕込む。
-# 2026 年 10 月時点、authorization ID が付くのは主に IAM の API なので、金庫も IAM のリソースにしている。
-# IAM Access Troubleshooter はプレビュー中 us-east-1 のみ。IAM はグローバルサービスだが、CloudShell を us-east-1 で
-# 開いていれば拒否の記録も us-east-1 に残る。
+# AWS Deep Cuts - IAM Access Troubleshooter ハンズオンの事前準備
+# ハンズオン用ロールと、読み取りを拒否する 4 種類の設定（ステージ 1〜4）を作成します。
+#   修了証のポリシー        aws-deepcuts-certificate       説明文（Description）に修了証。iam:GetPolicy で読み取る対象
+#   ハンズオン用ロール      aws-deepcuts-handson-role      タグ team=dev。アクセス許可の境界に aws-deepcuts-boundary
+#   ステージ 1              aws-deepcuts-inline-deny       ロールのインラインポリシー。修了証のポリシーへの iam:GetPolicy を Deny
+#                           aws-deepcuts-managed-deny      ロールにアタッチした管理ポリシー。同じく Deny
+#   ステージ 2・3           aws-deepcuts-read-certificate  iam:GetPolicy を Allow する管理ポリシー。条件 team=security。まだアタッチしない
+#   ステージ 4              aws-deepcuts-boundary          アクセス許可の境界。iam:GetPolicy を含まない
+# authorization ID が付くのは、2026 年 10 月時点では主に IAM の API であるため、読み取る対象も IAM のポリシーにしている。
+# IAM Access Troubleshooter はプレビュー中で us-east-1 だけで提供されているため、us-east-1 の CloudShell で実行する。
+
 readonly PROJECT_NAME="aws-deepcuts"
 readonly REGION="us-east-1"
-readonly ROLE_NAME="${PROJECT_NAME}-detective"
-readonly BOUNDARY_NAME="${PROJECT_NAME}-detective-boundary"
-readonly LICENSE_NAME="${PROJECT_NAME}-detective-license"
-readonly SEALED_NAME="${PROJECT_NAME}-sealed"
-readonly VAULT_NAME="${PROJECT_NAME}-vault"
-readonly CURSE_POLICY_NAME="${PROJECT_NAME}-cursed"
+readonly ROLE_NAME="${PROJECT_NAME}-handson-role"
+readonly CERT_NAME="${PROJECT_NAME}-certificate"
+readonly INLINE_DENY_NAME="${PROJECT_NAME}-inline-deny"
+readonly MANAGED_DENY_NAME="${PROJECT_NAME}-managed-deny"
+readonly READ_POLICY_NAME="${PROJECT_NAME}-read-certificate"
+readonly BOUNDARY_NAME="${PROJECT_NAME}-boundary"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly RESOURCE_FILE="${SCRIPT_DIR}/resource-ids.env"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  AWS Deep Cuts - IAM 脱出ゲーム セットアップ"
+echo "  AWS Deep Cuts - IAM Access Troubleshooter 事前準備"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ─── [1/6] 前提チェック ─────────────────────────────────────────
+# ─── [1/6] 前提の確認 ─────────────────────────────────────────
 echo "[1/6] 前提を確認..."
 if [[ -f "${RESOURCE_FILE}" ]]; then
   echo "❌ Error: ${RESOURCE_FILE} が既に存在します。前回の環境が残っています。" >&2
   echo "   先に bash ./cleanup.sh を実行してください。" >&2
   exit 1
 fi
-if [[ "${DEEPCUTS_DETECTIVE:-}" == "1" ]]; then
-  echo "❌ Error: 探偵のままです。先に source ./admin.sh で自分に戻ってください。" >&2
+if [[ "${DEEPCUTS_HANDSON_ROLE:-}" == "1" ]]; then
+  echo "❌ Error: ハンズオン用ロールに切り替えたままです。先に source ./switch-back.sh を実行してください。" >&2
   exit 1
 fi
+# iam-toolbox コマンドは、README の手順 3 の「CLI で評価の詳細を取得する方法」だけで使う。対応していなくても続ける
 if ! aws iam-toolbox get-request-authorization-details --generate-cli-skeleton input >/dev/null 2>&1; then
-  echo "❌ Error: この AWS CLI は iam-toolbox コマンドに対応していません（v2.36.31 以降が必要）。現在: $(aws --version 2>&1)" >&2
-  echo "   CloudShell の AWS CLI は最新版とは限りません。README の「前提条件」の手順でホームディレクトリに最新版を入れてください:" >&2
-  echo '   curl -sS https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip && unzip -q -o /tmp/awscliv2.zip -d /tmp \\' >&2
-  echo '     && /tmp/aws/install --install-dir "$HOME/.local/aws-cli" --bin-dir "$HOME/.local/bin" --update && export PATH="$HOME/.local/bin:$PATH"' >&2
-  exit 1
+  echo "⚠️  この AWS CLI は iam-toolbox コマンドに対応していません（現在: $(aws --version 2>&1 | cut -d' ' -f1)）。"
+  echo "   ハンズオンはこのまま進められます。手順 3 の「CLI で評価の詳細を取得する方法」を試す場合だけ、README の手順で更新してください。"
 fi
 CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null) || {
-  echo "❌ Error: AWS 認証情報が取得できません。AWS CLI の設定を確認してください。" >&2
+  echo "❌ Error: AWS の認証情報を取得できません。CloudShell で実行しているか確認してください。" >&2
   exit 1
 }
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-if [[ "${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}" != "us-east-1" ]]; then
-  echo "⚠️  CloudShell のリージョンが us-east-1 ではないようです（${AWS_REGION:-${AWS_DEFAULT_REGION:-}}）。"
-  echo "   Access Troubleshooter はプレビュー中 us-east-1 のみなので、us-east-1 の CloudShell で実行してください。"
-fi
 case "${CALLER_ARN}" in
-  *:root) echo "⚠️  ルートユーザーで実行しています。ルートユーザーは sts:AssumeRole を呼べないため、探偵に変身できません。IAM ユーザーで実行してください。" ;;
+  *:root)
+    echo "❌ Error: ルートユーザーで実行しています。ルートユーザーはロールに切り替えられないため、このハンズオンを実施できません。" >&2
+    echo "   IAM ユーザーまたは IAM Identity Center のユーザーでサインインしてから実行してください。" >&2
+    exit 1 ;;
 esac
-echo "  あなた: ${CALLER_ARN}"
+if [[ "${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}" != "us-east-1" ]]; then
+  echo "⚠️  CloudShell のリージョンが us-east-1 ではありません（${AWS_REGION:-${AWS_DEFAULT_REGION:-}}）。"
+  echo "   Access Troubleshooter はプレビュー中で us-east-1 だけで提供されているため、us-east-1 の CloudShell で実行してください。"
+fi
+echo "  あなた（管理者）: ${CALLER_ARN}"
 echo "  アカウント: ${ACCOUNT_ID} / リージョン: ${REGION}"
 
-# 名前は作成前に確定しているので、先にリソース情報を保存しておく（途中で失敗しても cleanup.sh が使える）
-VAULT_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${VAULT_NAME}"
-BOUNDARY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${BOUNDARY_NAME}"
+CERT_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${CERT_NAME}"
 ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
-SEALED_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${SEALED_NAME}"
-LICENSE_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${LICENSE_NAME}"
+MANAGED_DENY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${MANAGED_DENY_NAME}"
+READ_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${READ_POLICY_NAME}"
+BOUNDARY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/${BOUNDARY_NAME}"
+
+# 名前は作成前に決まっているため、先にリソース情報を保存する（途中で失敗しても cleanup.sh で削除できる）
 cat > "${RESOURCE_FILE}" <<EOF
-# AWS Deep Cuts IAM 脱出ゲーム - リソース情報（setup.sh が自動生成）
+# AWS Deep Cuts IAM Access Troubleshooter - リソース情報（setup.sh が作成）
 REGION="${REGION}"
 ACCOUNT_ID="${ACCOUNT_ID}"
 ROLE_NAME="${ROLE_NAME}"
 ROLE_ARN="${ROLE_ARN}"
-VAULT_NAME="${VAULT_NAME}"
-VAULT_ARN="${VAULT_ARN}"
+CERT_NAME="${CERT_NAME}"
+CERT_ARN="${CERT_ARN}"
+INLINE_DENY_NAME="${INLINE_DENY_NAME}"
+MANAGED_DENY_ARN="${MANAGED_DENY_ARN}"
+READ_POLICY_ARN="${READ_POLICY_ARN}"
 BOUNDARY_ARN="${BOUNDARY_ARN}"
-LICENSE_ARN="${LICENSE_ARN}"
-SEALED_ARN="${SEALED_ARN}"
-CURSE_POLICY_NAME="${CURSE_POLICY_NAME}"
 EOF
-# 前回の残りがあれば止める（resource-ids.env は上で作ったので、cleanup.sh がそのまま使える）
-for arn in "${VAULT_ARN}" "${BOUNDARY_ARN}" "${SEALED_ARN}" "${LICENSE_ARN}"; do
+# 前回の残りがあれば止める（resource-ids.env は上で保存したため、cleanup.sh でまとめて削除できる）
+for arn in "${CERT_ARN}" "${MANAGED_DENY_ARN}" "${READ_POLICY_ARN}" "${BOUNDARY_ARN}"; do
   if aws iam get-policy --policy-arn "${arn}" >/dev/null 2>&1; then
-    echo "❌ Error: ${arn} が既に存在します（前回の残り）。bash ./cleanup.sh を実行してから、もう一度 setup.sh を実行してください。" >&2
+    echo "❌ Error: ${arn} が既に存在します。前回の環境が残っています。" >&2
+    echo "   bash ./cleanup.sh を実行してから、もう一度 bash ./setup.sh を実行してください。" >&2
     exit 1
   fi
 done
 if aws iam get-role --role-name "${ROLE_NAME}" >/dev/null 2>&1; then
-  echo "❌ Error: ロール ${ROLE_NAME} が既に存在します（前回の残り）。bash ./cleanup.sh を実行してから、もう一度 setup.sh を実行してください。" >&2
+  echo "❌ Error: ロール ${ROLE_NAME} が既に存在します。前回の環境が残っています。" >&2
+  echo "   bash ./cleanup.sh を実行してから、もう一度 bash ./setup.sh を実行してください。" >&2
   exit 1
 fi
 echo ""
 
-# ─── [2/6] 金庫（修了証を説明文に刻んだ IAM ポリシー） ──────────
-echo "[2/6] 金庫を作成（IAM ポリシー ${VAULT_NAME}。説明文に修了証）..."
-CERTIFICATE="[修了証] IAM 脱出ゲーム (AWS Deep Cuts) - あなたは 5 つの鍵 (明示的 Deny x2, 暗黙の拒否, 条件キー, アクセス許可の境界) を authorization ID と IAM Access Troubleshooter で解き明かし, 金庫を開けました. 発行: アカウント ${ACCOUNT_ID} / $(date -u +%Y-%m-%d). 次の一歩: 本物の AccessDenied に出会ったら, まずエラーメッセージの中の authorization ID を探してください. 真犯人は, もう隠れられません."
-# 修了証が日本語で通らない場合（Description の文字種制限）に備えて、英語版で再試行する
-CERTIFICATE_ASCII="[Certificate] IAM Escape Game (AWS Deep Cuts) - You unlocked 5 locks (explicit deny x2, implicit deny, condition key, permissions boundary) with authorization IDs and IAM Access Troubleshooter, and opened the vault. Issued: account ${ACCOUNT_ID} / $(date -u +%Y-%m-%d). Next step: when you meet a real AccessDenied, look for the authorization ID in the error message first. The culprit can no longer hide."
-VAULT_DOCUMENT='{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Sid": "ThisPolicyIsJustAVault",
-      "Effect": "Deny",
-      "Action": "*",
-      "Resource": "*"
-    }]
-  }'
-if ! aws iam create-policy --policy-name "${VAULT_NAME}" --description "${CERTIFICATE}" \
-      --tags "Key=Project,Value=${PROJECT_NAME}" --policy-document "${VAULT_DOCUMENT}" >/dev/null 2>"${SCRIPT_DIR}/.setup-error.log"; then
-  if grep -qiE "ValidationError|Invalid|pattern|MalformedPolicyDocument" "${SCRIPT_DIR}/.setup-error.log"; then
-    echo "  ℹ️  日本語の修了証が受け付けられなかったので、英語版で作成します（$(head -c 160 "${SCRIPT_DIR}/.setup-error.log")）"
-    aws iam create-policy --policy-name "${VAULT_NAME}" --description "${CERTIFICATE_ASCII}" \
-      --tags "Key=Project,Value=${PROJECT_NAME}" --policy-document "${VAULT_DOCUMENT}" >/dev/null
+# ─── [2/6] 修了証のポリシー ───────────────────────────────────
+echo "[2/6] 修了証のポリシーを作成（${CERT_NAME}）..."
+CERT_TEXT="[修了証] AWS Deep Cuts IAM Access Troubleshooter ハンズオン - あなたは、明示的な拒否・許可の不足・条件の不一致・アクセス許可の境界による 4 種類の拒否の原因を、authorization ID と IAM Access Troubleshooter で特定し、このポリシーの説明文を読み取りました。発行: アカウント ${ACCOUNT_ID} / $(date -u +%Y-%m-%d)。AccessDenied のエラーが出たら、まずメッセージの最後にある authorization ID を探してください。"
+CERT_TEXT_ASCII="[Certificate] AWS Deep Cuts IAM Access Troubleshooter hands-on - You identified the causes of four kinds of denials (explicit deny, missing allow, unmet condition, permissions boundary) with authorization IDs and IAM Access Troubleshooter, and read this policy description. Issued: account ${ACCOUNT_ID} / $(date -u +%Y-%m-%d). When you see AccessDenied, look for the authorization ID at the end of the message first."
+# このポリシーはどこにもアタッチしない。説明文を読み取る対象として使うだけなので、本文は何も許可しない
+CERT_DOCUMENT='{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "NotUsedForAccessControl",
+    "Effect": "Deny",
+    "Action": "*",
+    "Resource": "*"
+  }]
+}'
+ERR_LOG="${SCRIPT_DIR}/.setup-error.log"
+if ! aws iam create-policy --policy-name "${CERT_NAME}" --description "${CERT_TEXT}" \
+      --tags "Key=Project,Value=${PROJECT_NAME}" --policy-document "${CERT_DOCUMENT}" >/dev/null 2>"${ERR_LOG}"; then
+  if grep -qiE "ValidationError|Invalid|pattern" "${ERR_LOG}"; then
+    echo "  日本語の説明文が受け付けられなかったため、英語の修了証で作成します。"
+    aws iam create-policy --policy-name "${CERT_NAME}" --description "${CERT_TEXT_ASCII}" \
+      --tags "Key=Project,Value=${PROJECT_NAME}" --policy-document "${CERT_DOCUMENT}" >/dev/null
   else
-    cat "${SCRIPT_DIR}/.setup-error.log" >&2
+    cat "${ERR_LOG}" >&2
+    rm -f "${ERR_LOG}"
     exit 1
   fi
 fi
-rm -f "${SCRIPT_DIR}/.setup-error.log"
-echo "  ${VAULT_ARN}"
+rm -f "${ERR_LOG}"
+echo "  作成: ${CERT_ARN}"
 echo ""
 
-# ─── [3/6] 鍵 4: アクセス許可の境界（iam:GetPolicy が無い） ──────
-echo "[3/6] アクセス許可の境界ポリシーを作成（鍵 4）..."
+# ─── [3/6] ステージ 4: アクセス許可の境界 ───────────────────────
+echo "[3/6] アクセス許可の境界を作成（${BOUNDARY_NAME}。iam:GetPolicy を含まない）..."
 aws iam create-policy --policy-name "${BOUNDARY_NAME}" \
-  --description "AWS Deep Cuts IAM escape game: permissions boundary for the detective (no iam:GetPolicy)" \
+  --description "AWS Deep Cuts IAM Access Troubleshooter hands-on: permissions boundary without iam:GetPolicy" \
   --tags "Key=Project,Value=${PROJECT_NAME}" \
   --policy-document '{
     "Version": "2012-10-17",
     "Statement": [{
-      "Sid": "DetectiveBoundary",
+      "Sid": "BoundaryAllowedActions",
       "Effect": "Allow",
       "Action": ["iam:ListPolicies", "sts:GetCallerIdentity"],
       "Resource": "*"
     }]
   }' >/dev/null
-echo "  ${BOUNDARY_ARN}"
+echo "  作成: ${BOUNDARY_ARN}"
 echo ""
 
-# ─── [4/6] 探偵ロール（鍵 1: 呪いと封印、鍵 3: 階級タグ） ────────
-echo "[4/6] 探偵ロールを作成（鍵 1・鍵 3）..."
+# ─── [4/6] ハンズオン用ロールと、ステージ 1 の Deny ─────────────
+echo "[4/6] ハンズオン用ロールを作成（${ROLE_NAME}。タグ team=dev、境界 ${BOUNDARY_NAME}）..."
 aws iam create-role --role-name "${ROLE_NAME}" \
-  --description "AWS Deep Cuts IAM escape game: the detective who tries to open the vault" \
+  --description "AWS Deep Cuts IAM Access Troubleshooter hands-on role" \
   --permissions-boundary "${BOUNDARY_ARN}" \
-  --tags "Key=Project,Value=${PROJECT_NAME}" "Key=clearance,Value=rookie" \
+  --tags "Key=Project,Value=${PROJECT_NAME}" "Key=team,Value=dev" \
   --assume-role-policy-document "{
     \"Version\": \"2012-10-17\",
     \"Statement\": [{
@@ -148,70 +161,66 @@ aws iam create-role --role-name "${ROLE_NAME}" \
       \"Action\": [\"sts:AssumeRole\", \"sts:TagSession\"]
     }]
   }" >/dev/null
-# 鍵 1a: 探偵自身に掛けられた「呪い」（インラインポリシーの明示的 Deny）
-aws iam put-role-policy --role-name "${ROLE_NAME}" --policy-name "${CURSE_POLICY_NAME}" \
+echo "  作成: ${ROLE_ARN}"
+# ステージ 1（その 1）: ロールに埋め込むインラインポリシーの Deny
+aws iam put-role-policy --role-name "${ROLE_NAME}" --policy-name "${INLINE_DENY_NAME}" \
   --policy-document "{
     \"Version\": \"2012-10-17\",
     \"Statement\": [{
-      \"Sid\": \"Cursed\",
+      \"Sid\": \"DenyReadCertificateInline\",
       \"Effect\": \"Deny\",
       \"Action\": \"iam:GetPolicy\",
-      \"Resource\": \"${VAULT_ARN}\"
+      \"Resource\": \"${CERT_ARN}\"
     }]
   }"
-# 鍵 1b: 金庫の「封印」（管理ポリシーの明示的 Deny。探偵にアタッチ）
-aws iam create-policy --policy-name "${SEALED_NAME}" \
-  --description "AWS Deep Cuts IAM escape game: the seal on the vault (explicit deny)" \
+echo "  インラインポリシーを追加: ${INLINE_DENY_NAME}"
+# ステージ 1（その 2）: ロールにアタッチする管理ポリシーの Deny
+aws iam create-policy --policy-name "${MANAGED_DENY_NAME}" \
+  --description "AWS Deep Cuts IAM Access Troubleshooter hands-on: explicit deny on reading the certificate policy" \
   --tags "Key=Project,Value=${PROJECT_NAME}" \
   --policy-document "{
     \"Version\": \"2012-10-17\",
     \"Statement\": [{
-      \"Sid\": \"VaultSealed\",
+      \"Sid\": \"DenyReadCertificate\",
       \"Effect\": \"Deny\",
       \"Action\": \"iam:GetPolicy\",
-      \"Resource\": \"${VAULT_ARN}\"
+      \"Resource\": \"${CERT_ARN}\"
     }]
   }" >/dev/null
-aws iam attach-role-policy --role-name "${ROLE_NAME}" --policy-arn "${SEALED_ARN}"
-echo "  ${ROLE_ARN}（タグ clearance=rookie、呪い ${CURSE_POLICY_NAME}、封印 ${SEALED_NAME}）"
+aws iam attach-role-policy --role-name "${ROLE_NAME}" --policy-arn "${MANAGED_DENY_ARN}"
+echo "  管理ポリシーを作成してアタッチ: ${MANAGED_DENY_NAME}"
 echo ""
 
-# ─── [5/6] 探偵免許（鍵 2: まだ付いていない、鍵 3: 条件付き） ─────
-echo "[5/6] 探偵免許（管理ポリシー、未アタッチ）を作成（鍵 2・鍵 3）..."
-aws iam create-policy --policy-name "${LICENSE_NAME}" \
-  --description "AWS Deep Cuts IAM escape game: detective license (opening the vault needs clearance=top-secret)" \
+# ─── [5/6] ステージ 2・3: 条件付きで許可する管理ポリシー ─────────
+echo "[5/6] 読み取りを許可する管理ポリシーを作成（${READ_POLICY_NAME}。まだアタッチしない）..."
+aws iam create-policy --policy-name "${READ_POLICY_NAME}" \
+  --description "AWS Deep Cuts IAM Access Troubleshooter hands-on: allow reading the certificate policy when the principal tag team is security" \
   --tags "Key=Project,Value=${PROJECT_NAME}" \
   --policy-document "{
     \"Version\": \"2012-10-17\",
-    \"Statement\": [
-      {
-        \"Sid\": \"LookAround\",
-        \"Effect\": \"Allow\",
-        \"Action\": \"iam:ListPolicies\",
-        \"Resource\": \"*\"
-      },
-      {
-        \"Sid\": \"OpenVaultWithClearance\",
-        \"Effect\": \"Allow\",
-        \"Action\": \"iam:GetPolicy\",
-        \"Resource\": \"${VAULT_ARN}\",
-        \"Condition\": {\"StringEquals\": {\"aws:PrincipalTag/clearance\": \"top-secret\"}}
-      }
-    ]
+    \"Statement\": [{
+      \"Sid\": \"AllowReadCertificateForSecurityTeam\",
+      \"Effect\": \"Allow\",
+      \"Action\": \"iam:GetPolicy\",
+      \"Resource\": \"${CERT_ARN}\",
+      \"Condition\": {\"StringEquals\": {\"aws:PrincipalTag/team\": \"security\"}}
+    }]
   }" >/dev/null
-echo "  ${LICENSE_ARN}"
+echo "  作成: ${READ_POLICY_ARN}"
 echo ""
 
-# ─── [6/6] 伝播待ち ────────────────────────────────────────────
-echo "[6/6] IAM の伝播を待機（10 秒）... リソース情報は ${RESOURCE_FILE} に保存済み"
+# ─── [6/6] IAM の反映待ち ─────────────────────────────────────
+echo "[6/6] IAM の変更の反映を待機（10 秒）..."
 sleep 10
+echo "  リソース情報: ${RESOURCE_FILE}"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "✅ セットアップが完了しました！"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "金庫: ${VAULT_ARN}"
-echo "探偵: ${ROLE_ARN}"
+echo "作成したロールは、IAM コンソールの次の画面で確認できます。"
+echo "  https://us-east-1.console.aws.amazon.com/iam/home#/roles/details/${ROLE_NAME}"
 echo ""
-echo "次のステップ: source ./detective.sh で探偵になり、金庫を開けてみてください。"
-echo "  aws iam get-policy --policy-arn ${VAULT_ARN} --query Policy.Description --output text"
+echo "次のステップ: README の手順 1 の「この手順で確かめること」で、作成したロールを IAM コンソールで確認してから、"
+echo "            手順 2 に進み、次のコマンドでハンズオン用ロールに切り替えてください。"
+echo "  source ./switch-role.sh"

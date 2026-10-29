@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""AWS Deep Cuts - IAM Access Troubleshooter: get-request-authorization-details の応答を読みやすく整形する
+"""AWS Deep Cuts - IAM Access Troubleshooter: get-request-authorization-details の応答（評価の詳細）を読みやすく整形する
 
 使い方:
-  aws iam-toolbox get-request-authorization-details --authorization-id <ID> --region us-east-1 --output json > evidence.json
-  python3 explain.py evidence.json          # または `... | python3 explain.py -`
+  aws iam-toolbox get-request-authorization-details --authorization-id <ID> --region us-east-1 --output json > authorization-details.json
+  python3 explain.py authorization-details.json          # または `... | python3 explain.py -`
 
-標準ライブラリのみ（CloudShell でそのまま動く）。
+最後の「→ 原因の候補」は、このスクリプトが評価の詳細から推測したものです。AWS の応答には含まれません。
+Python の標準ライブラリだけで動きます。
 """
 import json
 import sys
 
 EFFECT_LABEL = {
     "ALLOW": "許可",
-    "EXPLICIT_DENY": "明示的 Deny",
-    "IMPLICIT_DENY": "暗黙の拒否（どのポリシーも許可していない）",
+    "EXPLICIT_DENY": "明示的な拒否（Deny のステートメントに一致した）",
+    "IMPLICIT_DENY": "暗黙的な拒否（必要な Allow が無い）",
 }
 POLICY_LABEL = {
     "IDENTITY_BASED_POLICY": "ID ベースポリシー",
@@ -24,7 +25,7 @@ POLICY_LABEL = {
     "RESOURCE_CONTROL_POLICY": "RCP（リソースコントロールポリシー）",
     "VPC_ENDPOINT_POLICY": "VPC エンドポイントポリシー",
 }
-# IAM のポリシー評価ロジックで、各ポリシータイプが「許可を与える層」か「許可を絞る層」か
+# IAM のポリシーの評価で、各ポリシーの種類が「許可を与えるポリシー」か「許可を絞るポリシー」か
 GRANT_TYPES = {"IDENTITY_BASED_POLICY", "RESOURCE_BASED_POLICY"}
 GATE_TYPES = {"PERMISSIONS_BOUNDARY", "SESSION_POLICY", "SERVICE_CONTROL_POLICY", "RESOURCE_CONTROL_POLICY", "VPC_ENDPOINT_POLICY"}
 
@@ -57,14 +58,14 @@ def explain(doc):
     request_context = doc.get("requestContext", {}) or {}
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print("  リクエストコンテキスト（リクエスト全体に共通する条件キー）")
+    print("  リクエストのコンテキスト（リクエスト全体に共通する条件キーと値）")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     for key, value in sorted(request_context.items()):
         print(f"  {key} = {short(value)}")
     print()
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print("  評価（アクション × リソースごとの判定）")
+    print("  評価（アクションとリソースの組ごとの判定）")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     for i, ev in enumerate(doc.get("evaluations", []), 1):
         effect = ev.get("evaluatedEffect", "?")
@@ -84,11 +85,11 @@ def explain(doc):
                 print(f"          アタッチ先: {attached}")
             for st in mp.get("matchedStatements") or []:
                 print(f"          ステートメント Sid={st.get('sid')!r} → {st.get('evaluatedEffect')}")
-        print(f"    → 読み方: {verdict(ev, policies, request_context)}")
+        print(f"    → 原因の候補（スクリプトによる推測）: {verdict(ev, policies, request_context)}")
         print()
 
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print("  評価対象になったポリシー一覧")
+    print("  評価されたポリシーの一覧")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     for pol in doc.get("policies", []):
         ptype = pol.get("type", "?")
@@ -104,7 +105,7 @@ def explain(doc):
 
 
 def verdict(ev, policies, request_context):
-    """評価 1 件から「真犯人」を文章にする（IAM のポリシー評価ロジックに沿った読み方）。"""
+    """評価 1 件から、拒否の原因の読み方を文章にする（IAM のポリシーの評価の順序に沿う）。"""
     effect = ev.get("evaluatedEffect")
     matched = ev.get("matchedPolicies") or []
     if effect == "ALLOW":
@@ -116,9 +117,10 @@ def verdict(ev, policies, request_context):
             for st in mp.get("matchedStatements") or []:
                 if st.get("evaluatedEffect") == "DENY":
                     culprits.append(f"{POLICY_LABEL.get(ptype, ptype)} の Sid={st.get('sid')!r}")
-        return "明示的 Deny が勝っています。真犯人: " + ("、".join(culprits) if culprits else "（DENY ステートメントの情報なし）")
+        return "Deny のステートメントに一致したため拒否されました。原因: " + ("、".join(culprits) if culprits else "一致した DENY のステートメントの情報がありません")
 
-    # IMPLICIT_DENY: 「一致したポリシー」は空のことが多い（API 仕様）。評価されたポリシーの種類から候補を絞る
+    # IMPLICIT_DENY: API リファレンスによると、一致したポリシーは返らない。評価されたポリシーの種類から候補を絞る。
+    # ただし、AWS Organizations の組織に属するアカウントでは、SCP の Allow が一致したポリシーに並ぶことがある
     allow_types = {policies.get(mp.get("uri"), {}).get("type") for mp in matched
                    if any(st.get("evaluatedEffect") == "ALLOW" for st in (mp.get("matchedStatements") or []))}
     evaluated_types = {p.get("type") for p in policies.values()}
@@ -129,23 +131,28 @@ def verdict(ev, policies, request_context):
     if allow_types & GRANT_TYPES:
         gates = [g for g in gates_present if g not in allow_types]
         if gates:
-            return ("ID ベース（またはリソースベース）ポリシーは Allow しているのに拒否されています。真犯人の候補は "
-                    + "、".join(POLICY_LABEL[g] for g in gates) + "（その層に Allow が無い）です。")
-        return "ID ベースポリシーは Allow しているのに拒否されています。別の層（SCP / RCP / 境界 / セッションポリシー）が許可していない可能性があります。"
+            return ("ID ベースポリシーかリソースベースポリシーは Allow していますが、拒否されています。原因の候補は、Allow が無い "
+                    + "、".join(POLICY_LABEL[g] for g in gates) + " です。")
+        return "ID ベースポリシーは Allow していますが、拒否されています。許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシー）が許可していない可能性があります。"
 
     if not (evaluated_types & GRANT_TYPES):
-        msg = ("評価されたポリシーに ID ベースポリシーが 1 枚もありません。プリンシパルは、このアクションを許可するポリシーを何も持っていません。"
-               "まず ID ベースポリシーに Allow を足してください。")
+        msg = ("評価されたポリシーに ID ベースポリシーが 1 つもありません。このユーザーやロールには、このアクションを許可するポリシーがありません。"
+               "このアクションを Allow する ID ベースポリシーを追加してください。")
     else:
-        msg = ("ID ベースポリシーは評価されましたが、このアクション・リソースを Allow するステートメントが一致していません"
-               "（Allow が無いか、Condition が満たされていません）。")
+        # 暗黙的な拒否では一致したポリシーが返らないため、ID ベースポリシーの Allow が一致したかどうかは、この応答からは分からない
+        msg = ("暗黙的な拒否のため、一致したポリシーは表示されません。評価されたポリシーには、ID ベースポリシーがあります。"
+               "原因は次のどちらかです。(1) ID ベースポリシーの Allow の Condition を、コンテキストの値が満たしていない。")
         if tag_keys:
-            msg += " 条件キーの値を疑ってください: " + ", ".join(f"{k} = {short(request_context.get(k, (ev.get('context') or {}).get(k)), 40)}" for k in tag_keys) + "。"
+            msg += "条件キーの値: " + ", ".join(f"{k} = {short(request_context.get(k, (ev.get('context') or {}).get(k)), 40)}" for k in tag_keys) + "。"
         if gates_present:
-            msg += (" 評価されたポリシーには " + "、".join(POLICY_LABEL[g] for g in gates_present)
-                    + " もあります。ID ベースポリシーに Allow があるのに拒否されるなら、その層に同じ Allow が必要です。")
+            msg += ("(2) 評価されたポリシーにある" + "、".join(POLICY_LABEL[g] for g in gates_present)
+                    + "が、同じアクションを Allow していない。")
+        else:
+            msg += "(2) Allow のステートメントの Action か Resource が、リクエストに当てはまっていない。"
+        msg += ("エラーメッセージの拒否の理由が `no identity-based policy allows` であれば ID ベースポリシーの Condition と書き方を、"
+                "`no permissions boundary allows` であればアクセス許可の境界を確かめてください。")
     if "SERVICE_CONTROL_POLICY" in allow_types:
-        msg += "（SCP の ALLOW 一致は「SCP は止めていない」という意味で、真犯人ではありません）"
+        msg += " SCP の ALLOW の一致は「SCP は拒否していない」という意味で、拒否の原因ではありません。"
     return msg
 
 

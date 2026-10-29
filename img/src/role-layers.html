@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- ハンズオン用ロールの設定（README 手順 1）。setup.sh が作成した直後の状態。拒否の原因になる設定に、ステージの札を付ける。
+     ロールとして修了証のポリシーに iam:GetPolicy を呼び出すと、拒否される。aws-deepcuts-read-certificate はまだアタッチしていないため点線で薄くする。
+     中身は role-layers.js（role-layers・stage-1〜stage-4 で共通の枠組み。body の data-mode で描き分ける）。
+     根拠: hands-on/setup.sh（ロール・ポリシー・Sid・タグ・アクセス許可の境界）、DESIGN-v3-iam.md の「ステージ」の表、README の各ステージの修正の手順。
+     アイコン: npm パッケージ aws-icons（AWSIdentityAccessManagementRole, AWSIdentityAccessManagementPermissions） -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+</head><body data-mode="initial">
+<div id="fig"><svg id="wires"></svg></div>
+<script src="role-layers.js"></script>
+</body></html>

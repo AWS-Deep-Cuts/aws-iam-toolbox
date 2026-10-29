@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- ステージ 1 の原因（README 手順 4）。インラインポリシー aws-deepcuts-inline-deny（Sid DenyReadCertificateInline）と、
+     管理ポリシー aws-deepcuts-managed-deny（Sid DenyReadCertificate）の Deny のステートメントに一致し、明示的な拒否（EXPLICIT_DENY）になる。
+     修正: ロールの「許可」タブで 2 つとも削除する。インラインポリシーは削除され（DeleteRolePolicy）、管理ポリシーはデタッチされる（DetachRolePolicy）。
+     中身は role-layers.js（role-layers・stage-1〜stage-4 で共通の枠組み。body の data-mode で描き分ける）。
+     根拠: hands-on/setup.sh（ロール・ポリシー・Sid・タグ・アクセス許可の境界）、DESIGN-v3-iam.md の「ステージ」の表、README の各ステージの修正の手順。
+     アイコン: npm パッケージ aws-icons（AWSIdentityAccessManagementRole, AWSIdentityAccessManagementPermissions） -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+</head><body data-mode="stage-1">
+<div id="fig"><svg id="wires"></svg></div>
+<script src="role-layers.js"></script>
+</body></html>
