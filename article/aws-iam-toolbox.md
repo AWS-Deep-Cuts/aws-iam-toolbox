@@ -76,7 +76,7 @@ Access Troubleshooter の応答（`GetRequestAuthorizationDetails`）は、こ�
 
 | 応答のフィールド | 中身 | 評価ロジックとの対応 |
 | --- | --- | --- |
-| `requestContext` | リクエスト全体に共通する条件キーの値（API リファレンスの例では `aws:PrincipalARN`、`aws:SourceIp`、`aws:RequestedRegion`、`aws:SecureTransport`。条件に使った `aws:PrincipalTag/...` も含まれるはずです〔実測値: 未測定〕） | 条件（`Condition`）が満たされたかどうかの材料 |
+| `requestContext` | リクエスト全体に共通する条件キーの値（API リファレンスの例では、プリンシパルの ARN、`aws:SourceIp`、`aws:RequestedRegion`、`aws:SecureTransport`。条件に使った `aws:PrincipalTag/...` も含まれるはずです。キーの正確な綴りは実測で確認〔実測値: 未測定〕） | 条件（`Condition`）が満たされたかどうかの材料 |
 | `evaluations[]` | アクション × リソースの組ごとの評価。`action`、`resource`、`evaluatedEffect`（`ALLOW` / `EXPLICIT_DENY` / `IMPLICIT_DENY`）、`matchedPolicies[]` | 1 つの API 呼び出しに複数の評価があることがある（`iam:PassRole` など） |
 | `evaluations[].matchedPolicies[]` | その評価で **一致した** ポリシーと、一致したステートメントの `sid` と効果（`ALLOW` / `DENY`） | 明示的 Deny の「真犯人」はここに名指しされる。暗黙の拒否では空 |
 | `policies[]` | **評価対象になった** すべてのポリシー。`type`（7 種類）、インラインかどうか、識別子、アタッチ先 | 暗黙の拒否のときに「どこに Allow を足せばよいか」を考える材料 |
@@ -128,7 +128,7 @@ IAM Access Troubleshooter は、`AccessDenied` を「推理するもの」から
 # もっと深く知りたい人へ
 - **3 世代のエラーメッセージ**: エンコードされた拒否理由を `sts:DecodeAuthorizationMessage` でデコードする方式（EC2 など一部のサービス）→ 2021 年のポリシー種別付き → 2026 年 1 月の ARN 付き → authorization ID。`DecodeAuthorizationMessage` の公式ドキュメントには「認可状態の詳細は、リクエストしたユーザーが見るべきでない特権情報を含みうるためエンコードされている」とあり、authorization ID はこの問題を「ID は見せるが、中身は権限で守る」という形で解いています。
 - **IAM Policy Simulator との違い**: Policy Simulator は「もし呼んだらどうなるか」を事前に試すツール（SCP は評価できるが RCP は未対応）、Access Troubleshooter は「実際に拒否されたリクエスト」の事後分析です。設計時はシミュレーター、運用時はトラブルシューター、と使い分けます。
-- **CloudTrail との関係**: 拒否は CloudTrail にも `errorCode` / `errorMessage` として記録され、`errorMessage` にはエラーメッセージ全文が残るので、ID をそこから拾って照会することは今でもできます（`errorMessage` は長いと切り詰められる点に注意）。2026 年 10 月時点では ID 専用のフィールドは無く、専用フィールドが付けば事後監査はさらに楽になりそうです。
+- **CloudTrail との関係**: 拒否は CloudTrail にも `errorCode` / `errorMessage` として記録されます。`errorMessage` にエラーメッセージがそのまま残るので ID をそこから拾って照会できた、という第三者の報告があります（長いメッセージは切り詰められることがある点に注意）。2026 年 10 月時点では ID 専用のフィールドは無く、専用フィールドが付けば事後監査はさらに楽になりそうです。
 
 ---
 
