@@ -1,4 +1,4 @@
 resource-ids.env
-hands-on/output/
+hands-on/evidence.json
 __pycache__/
 *.pyc
