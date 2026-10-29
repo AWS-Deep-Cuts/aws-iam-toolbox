@@ -15,10 +15,12 @@ with Diagram("", show=False, filename="architecture", outformat="png", direction
     you = User("あなた\n(CloudShell, 管理者)")
     troubleshooter = IAM("IAM Access Troubleshooter\n（authorization ID から\n評価の過程を見る）")
     with Cluster("探偵（source ./detective.sh で変身）", graph_attr=ATTR):
-        detective = IAMRole("探偵ロール\nタグ clearance=rookie\n呪い（インライン Deny）\nアクセス許可の境界")
-        license_ = IAMPermissions("探偵免許（管理ポリシー）\n条件: clearance=top-secret")
+        detective = IAMRole("探偵ロール\n鍵 1: 呪い（インライン Deny）\n鍵 3: タグ clearance=rookie\n鍵 4: アクセス許可の境界")
+        sealed = IAMPermissions("鍵 1: 封印（管理ポリシー）\naws-deepcuts-sealed\nアタッチ済みの Deny")
+        license_ = IAMPermissions("鍵 2: 探偵免許（未アタッチ）\n鍵 3: 条件 clearance=top-secret")
     vault = IAMPermissions("金庫（IAM 管理ポリシー）\naws-deepcuts-vault\n説明文に修了証が刻まれている")
     you >> Edge(label="sts:AssumeRole") >> detective
     detective >> Edge(label="iam:GetPolicy\n→ AccessDenied + authorization ID", color="firebrick", fontcolor="firebrick") >> vault
-    license_ >> Edge(label="アタッチ（鍵 2）", style="dashed") >> detective
+    sealed >> Edge(label="アタッチ済み", style="dashed") >> detective
+    license_ >> Edge(label="アタッチする（鍵 2）", style="dashed") >> detective
     you >> Edge(label="真犯人を調べて、\nポリシーを直す", style="dotted") >> troubleshooter
