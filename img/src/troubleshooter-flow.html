@@ -1,27 +1,32 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
-<!-- 拒否されてから、評価の詳細を照会するまで（記事の「IAM Access Troubleshooter とは？」）。
+<!-- 拒否されてから、評価の詳細を照会するまで（記事の「IAM Access Troubleshooterとは？」）。図の番号は、記事の番号つきの説明 1〜6 と対応する。
      3 つの枠: 拒否されるプリンシパル（灰色の点線）、IAM が自動で行う処理（差し色の点線）、管理者（灰色の点線）。
-     1 プリンシパルが API を呼び出す → 2 IAM がポリシーを評価し、拒否する → 3 エラーメッセージに authorization ID とコンソールへのリンクを付けて返す。
-     2 の後、IAM はエラーを返す処理とは別に、評価の詳細を記録する（4。少なくとも 24 時間は照会できる） → 5 管理者が authorization ID で照会する → 6 管理者が評価の詳細を確認する。
+     1 プリンシパルが API を呼び出す（例: IAM の GetPolicy）→ 2 IAM がポリシーを評価して拒否する
+     → 3 IAM が authorization ID と Access Troubleshooter の URL を付けたエラーメッセージを返す。
+     2 の後、IAM はエラーを返す処理とは別に、少し遅れて評価の詳細を記録する（4。拒否から少なくとも 24 時間は照会できる。記録先は拒否が起きたリージョンで、プレビュー中は us-east-1）
+     → 5 管理者が 3 の URL を開くか API を呼び出して、authorization ID で照会する → 6 管理者が評価の詳細を確認する。
+     2 → 4 の矢印にはラベルを付けない。「エラーを返す処理とは別に、少し遅れて記録する」ことは 4 の箱に書く。
      根拠:
+       - 1: 例の API は IAM の GetPolicy。iam:GetPolicy は API ではなくアクション（権限）の名前のため、箱には API の名前を書く（記事は API とアクションを区別している）。
        - 3: エラーメッセージの末尾「Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID> for complete details,
          or call the GetRequestAuthorizationDetails API with the following authorization id: <ID>」（公開されている CI のログ。ファクトシート R1-7 ほか）。
+         この URL は Access Troubleshooter の画面の URL（記事・README・error-message の 5 と同じ呼び名）。
          ID が付くのは対応している API だけで、付かない場合もある（IAM User Guide「Troubleshoot access denied error messages with authorization ID (Preview)」、ファクトシート 057）。
-       - 2 → 4 の「非同期に記録する」: User Guide「If a call to GetRequestAuthorizationDetails returns a not-found response, wait a short time and try again.」
-         評価の詳細は非同期に記録され、拒否の直後は ResourceNotFoundException が返ることがある（ファクトシート 056）。
-       - 4: 「Authorization details are available for at least 24 hours after the denial.」（API モデル）、User Guide は「24 hours」（ファクトシート 055）。
-         GetRequestAuthorizationDetails はリージョンごとの API で、拒否が起きたリージョンで呼ぶ（ファクトシート 012）。
+       - 4 の「エラーを返す処理とは別に、少し遅れて記録する」: User Guide「If a call to GetRequestAuthorizationDetails returns a not-found response, wait a short time and try again.」
+         評価の詳細は非同期に記録され、拒否の直後は ResourceNotFoundException が返ることがある（ファクトシート 056、GLOSSARY-v3 の「記録のタイミング」）。
+       - 4 の「拒否から少なくとも 24 時間は照会できる」: 「Authorization details are available for at least 24 hours after the denial.」（API モデル）、User Guide は「24 hours」（ファクトシート 055）。
+       - 4 の「記録先は拒否が起きたリージョン」: GetRequestAuthorizationDetails はリージョンごとの API で、拒否が起きたリージョンで呼び出す（ファクトシート 012）。
          プレビューの提供リージョンは US East (N. Virginia) = us-east-1（SDK・CLI の 2026-08-25 のリリースノート、ファクトシート 007）。
        - 5: 「To use this operation, you must have the iam:GetRequestAuthorizationDetails permission.」（API モデル、ファクトシート 018）。
-       - 6: 応答の requestContext・evaluations（evaluatedEffect と matchedPolicies の matchedStatements）・policies（botocore iam-toolbox service-2.json、ファクトシート 024・032〜050）。
-         並びは response-anatomy の 1〜4 と、記事・README の表の順にそろえる。
+       - 6: 応答の requestContext・evaluations（evaluatedEffect と matchedPolicies）・policies（botocore iam-toolbox service-2.json、ファクトシート 024・032〜050）。
+         項目の名前は GLOSSARY-v3（リクエストのコンテキスト・判定・一致したポリシー・評価されたポリシー）。並びは記事の説明 6 の順にそろえる。
      アイコン: npm パッケージ aws-icons の AWSIdentityandAccessManagement（2 の箱。ポリシーを評価するのが IAM であることを示す） -->
 <link rel="stylesheet" href="diagram.css">
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 684px; }
+  #fig { width: 800px; height: 739px; }
   .lane { left: 0; width: 800px; }
 
   /* 手順の箱：番号・題・説明。右上に、処理する AWS のサービスのアイコンを置ける */
@@ -36,43 +41,40 @@
   .sb ul { margin: 4px 0 0; padding: 0 0 0 1.1em; font-size: 16px; font-weight: 500; line-height: 1.45; white-space: nowrap; }
   /* 1 行だけの箱：題を縦の中央に置く */
   .sb.one { align-items: center; }
-
-  .lbl.k { color: var(--ink); font-weight: 900; }
 </style>
 </head><body>
 <div id="fig">
   <svg id="wires"></svg>
 
+  <!-- 4 の箱の下端（約 484px）から IAM の枠の下端（517px）までは 30px 以上あけ、5 → 4 の矢印の先端（長さ約 18px）が枠の点線に重ならないようにする -->
   <div class="lane" style="top:0;height:132px"><span class="lt">拒否されるプリンシパル</span></div>
-  <div class="lane aws" style="top:146px;height:316px"><span class="lt">IAM が自動で行う処理</span></div>
-  <div class="lane" style="top:476px;height:208px"><span class="lt">管理者</span></div>
+  <div class="lane aws" style="top:146px;height:371px"><span class="lt">IAM が自動で行う処理</span></div>
+  <div class="lane" style="top:531px;height:208px"><span class="lt">管理者</span></div>
 
   <!-- 拒否されるプリンシパル -->
   <div class="sb" id="s1" data-self="1" style="left:16px;top:42px;width:372px"><i>1</i><div>
-    <b>API を呼び出す</b><span>例: <code>iam:GetPolicy</code></span></div></div>
+    <b>API を呼び出す</b><span>例: IAM の <code>GetPolicy</code></span></div></div>
 
   <!-- IAM が自動で行う処理。2 と 3 は中心の高さ（237px）をそろえ、2 → 3 の線を水平にする -->
   <div class="sb one" id="s2" data-self="1" style="left:16px;top:206px;width:372px;height:62px"><i>2</i><div>
-    <b>ポリシーを評価し、拒否する</b></div><img src="../icons/AWSIdentityandAccessManagement.svg" alt=""></div>
+    <b>ポリシーを評価して拒否する</b></div><img src="../icons/AWSIdentityandAccessManagement.svg" alt=""></div>
   <div class="sb" id="s3" data-self="1" style="left:440px;top:186px;width:340px;height:102px"><i>3</i><div>
-    <b>エラーメッセージを返す</b><span><em>authorization ID</em> と<br>コンソールへのリンクを付ける</span></div></div>
+    <b>エラーメッセージを返す</b><span><em>authorization ID</em> と<br>Access Troubleshooter の URL を付ける</span></div></div>
   <div class="sb hot" id="s4" data-self="1" style="left:16px;top:312px;width:372px"><i>4</i><div>
-    <b>評価の詳細を記録する</b><span>拒否が起きたリージョンに記録する<br>少なくとも 24 時間は照会できる<br>拒否の直後は、まだ照会できないことがある</span></div></div>
+    <b>評価の詳細を記録する</b><ul><li>エラーを返す処理とは別に、<br>少し遅れて記録する</li><li>拒否から少なくとも 24 時間は照会できる</li><li>記録先は拒否が起きたリージョン。<br>プレビュー中は <code>us-east-1</code></li></ul></div></div>
 
   <!-- 管理者 -->
-  <div class="sb" id="s5" data-self="1" style="left:16px;top:522px;width:372px"><i>5</i><div>
-    <b>authorization ID で照会する</b><span>3 のリンクを開くか、API<br><code>GetRequestAuthorizationDetails</code><br>必要な権限<br><code>iam:GetRequestAuthorizationDetails</code></span></div></div>
-  <div class="sb" id="s6" data-self="1" style="left:440px;top:522px;width:340px"><i>6</i><div>
-    <b>評価の詳細を確認する</b><ul><li>リクエストのコンテキスト</li><li>判定</li><li>一致したポリシーとステートメント</li><li>評価されたポリシー</li></ul></div></div>
-
-  <div class="lbl k" id="lAsync" style="left:212px;top:279px">エラーとは別に記録する</div>
+  <div class="sb" id="s5" data-self="1" style="left:16px;top:577px;width:372px"><i>5</i><div>
+    <b>authorization ID で照会する</b><span>3 の URL を開くか、次の API を呼び出す<br><code>GetRequestAuthorizationDetails</code><br>必要な権限<br><code>iam:GetRequestAuthorizationDetails</code></span></div></div>
+  <div class="sb" id="s6" data-self="1" style="left:440px;top:577px;width:340px"><i>6</i><div>
+    <b>評価の詳細を確認する</b><ul><li>リクエストのコンテキスト</li><li>判定</li><li>一致したポリシー</li><li>評価されたポリシー</li></ul></div></div>
 </div>
 <script>
 window.addEventListener('load', async () => { await document.fonts.ready;
   wire('#s1', '#s2', {from: 'b', to: 't'});                          // 1 → 2：API を呼び出す
   wire('#s2', '#s3', {});                                            // 2 → 3
   wire('#s3', '#s1', {from: 't', to: 'r', elbow: 'v'});              // 3 → 1：エラーメッセージが返る
-  wire('#s2', '#s4', {from: 'b', to: 't'});                          // 2 の後、エラーを返す処理とは別に、評価の詳細を記録する
+  wire('#s2', '#s4', {from: 'b', to: 't'});                          // 2 の後、エラーを返す処理とは別に、評価の詳細を記録する（ラベルは付けず、4 の箱に書く）
   wire('#s5', '#s4', {from: 't', to: 'b'});                          // 5 → 4：authorization ID で照会する
   wire('#s4', '#s6', {from: 'r', to: 't', elbow: 'h'});              // 4 → 6：評価の詳細が返る
   document.body.dataset.ready = '1';

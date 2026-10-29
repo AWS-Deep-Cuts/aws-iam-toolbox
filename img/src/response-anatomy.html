@@ -1,7 +1,17 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
-<!-- GetRequestAuthorizationDetails の応答の 4 つの部分（記事の「仕組み」・README 手順 3）。
-     JSON は説明用に短くした例。値はハンズオンのステージ 1（明示的な拒否）を想定し、ARN の前半を「…」で省略した。
+<!-- GetRequestAuthorizationDetails の応答の 4 つの部分（記事の「仕組み：評価の詳細の読み方」・README 手順 3）。
+     JSON は、API の仕様をもとに作成した説明用の例（実際の応答を短くしたものではない）。値はハンズオンのステージ 1（明示的な拒否）を想定し、
+     ARN の前半と、evaluations[].context の中身を「…」で省略した。
+     注釈の名前は GLOSSARY-v3 の 4 つの項目（リクエストのコンテキスト・判定・一致したポリシー・評価されたポリシー）。
+       - 2 の説明「アクションとリソースの組ごとの評価の結論」: Evaluation は 1 つのアクションとリソースの組の評価で、evaluatedEffect はその結論。
+       - 3 の説明「暗黙的な拒否では返らない」: 記事と README の表の「API リファレンスによると、暗黙的な拒否では一致したポリシーは返らない」と同じ内容。
+       - 4 の説明「ポリシーを識別する uri」: PolicyInfo.uri と MatchedPolicy.uri は、ポリシーを識別し、一致したポリシーと評価されたポリシーを突き合わせるための値
+         （管理ポリシーは ARN、インラインポリシーは不透明な識別子）。
+       - 4 の説明「アタッチされている先」: PolicyInfo.attachedTo（AttachedTo { arn } の一覧）。ID ベースポリシー・セッションポリシー・アクセス許可の境界では
+         プリンシパルの ARN（API モデルの AttachedTo.arn の説明、ファクトシート 048・049）。記事と README の表の「アタッチされている先」と同じ項目。
+         値は実際の応答で確かめていないため、JSON では「…」で省略した。
+       - evaluations[].context: 「The context keys and values specific to this evaluation.」記事の表は、アクションとリソースの組ごとの値がここに含まれると説明する。
      ステージ 1 のロールには、インラインポリシー aws-deepcuts-inline-deny・管理ポリシー aws-deepcuts-managed-deny・アクセス許可の境界
      aws-deepcuts-boundary の 3 つが付いている（hands-on/setup.sh）。policies には 3 つとも描き、matchedPolicies は管理ポリシーの 1 つだけを描いて、
      残りを灰色の「…」で省略した。インラインポリシーの uri は不透明な識別子で、観測では inline: で始まる
@@ -19,7 +29,7 @@
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 750px; }
+  #fig { width: 800px; height: 772px; }
   .card { left: 0; top: 0; width: 436px; }
   .card > .h { display: flex; align-items: center; gap: 10px; padding: 7px 12px; }
   .card > .h img { width: 28px; height: 28px; flex: none; }
@@ -35,6 +45,7 @@
   .co > b { font-size: 18px; font-weight: 900; line-height: 26px; }
   .co > code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; line-height: 1.5; color: var(--grey); }
   .co > span { font-size: 16px; font-weight: 500; line-height: 1.45; }
+  .co > span code { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
   .co.hot > i { background: var(--hot); }
   .co.hot > b { color: var(--hot); }
 </style>
@@ -42,7 +53,7 @@
 <div id="fig">
   <svg id="wires"></svg>
   <div class="card" id="json" data-chk="1">
-    <div class="h"><img src="../icons/AWSIdentityandAccessManagement.svg"><div><span class="ht">GetRequestAuthorizationDetails の応答</span><span class="hs">説明用に短くした例</span></div></div>
+    <div class="h"><img src="../icons/AWSIdentityandAccessManagement.svg"><div><span class="ht">GetRequestAuthorizationDetails の応答</span><span class="hs">説明用に作成した例</span></div></div>
 <pre>{
   <span id="r1"><strong>"requestContext"</strong>: {
     "aws:RequestedRegion": "us-east-1",
@@ -52,6 +63,7 @@
   <span id="r2"><strong>"evaluations"</strong>: [ {
     "action": "iam:GetPolicy",
     "resource": "<i>…</i>/aws-deepcuts-certificate",
+    "context": { <i>…</i> },
     "evaluatedEffect": <strong>"EXPLICIT_DENY"</strong>,</span>
     <span id="r3"><strong>"matchedPolicies"</strong>: [ {
       "uri": "<i>…</i>/aws-deepcuts-managed-deny",
@@ -64,21 +76,24 @@
   <span id="r4"><strong>"policies"</strong>: [
     { "type": <strong>"IDENTITY_BASED_POLICY"</strong>,
       "inline": true,
-      "uri": "inline:<i>…</i>" },
+      "uri": "inline:<i>…</i>",
+      "attachedTo": [ <i>…</i> ] },
     { "type": <strong>"IDENTITY_BASED_POLICY"</strong>,
       "inline": false,
-      "uri": "<i>…</i>/aws-deepcuts-managed-deny" },
+      "uri": "<i>…</i>/aws-deepcuts-managed-deny",
+      "attachedTo": [ <i>…</i> ] },
     { "type": <strong>"PERMISSIONS_BOUNDARY"</strong>,
       "inline": false,
-      "uri": "<i>…</i>/aws-deepcuts-boundary" }
+      "uri": "<i>…</i>/aws-deepcuts-boundary",
+      "attachedTo": [ <i>…</i> ] }
   ]</span>
 }</pre>
   </div>
 
   <div class="co" id="c1" data-chk="1"><i>1</i><b>リクエストのコンテキスト</b><code>requestContext</code><span>リクエスト全体の条件キーの値</span></div>
-  <div class="co" id="c2" data-chk="1"><i>2</i><b>判定</b><code>evaluations[].evaluatedEffect</code><span>アクションとリソースの組ごとの判定</span></div>
-  <div class="co hot" id="c3" data-chk="1"><i>3</i><b>一致したポリシー</b><code>evaluations[].matchedPolicies</code><span>一致したポリシーとステートメント。<br>暗黙的な拒否では空になる</span></div>
-  <div class="co" id="c4" data-chk="1"><i>4</i><b>評価されたポリシー</b><code>policies</code><span>評価されたすべてのポリシーと、<br>その種類・インラインかどうか</span></div>
+  <div class="co" id="c2" data-chk="1"><i>2</i><b>判定</b><code>evaluations[].evaluatedEffect</code><span>アクションとリソースの組ごとの<br>評価の結論</span></div>
+  <div class="co hot" id="c3" data-chk="1"><i>3</i><b>一致したポリシー</b><code>evaluations[].matchedPolicies</code><span>一致したポリシーとステートメント。<br>暗黙的な拒否では返らない</span></div>
+  <div class="co" id="c4" data-chk="1"><i>4</i><b>評価されたポリシー</b><code>policies</code><span>評価されたすべてのポリシーと、<br>その種類・インラインかどうか・<br>ポリシーを識別する <code>uri</code>・<br>アタッチされている先</span></div>
 </div>
 <script>
 // 線を引く（wires.js と同じ太さと色）。点は [x, y] の配列
@@ -105,6 +120,10 @@ window.addEventListener('load', async () => {
     path([[X - 8, bottom], [X, bottom], [X, top], [co.offsetLeft - 4, top]], hot);
     path([[X - 8, top], [X, top]], hot);
   }
+  // 図の高さは、カードと注釈の下端に余白を足して決める
+  let low = card.bottom - F.top;
+  for (const n of [1, 2, 3, 4]) { const co = document.getElementById('c' + n); low = Math.max(low, co.offsetTop + co.offsetHeight); }
+  document.getElementById('fig').style.height = Math.ceil(low + 11) + 'px';
   document.body.dataset.ready = '1';
 });
 </script>

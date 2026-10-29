@@ -7,9 +7,13 @@
      - 先頭の「An error occurred (AccessDenied) when calling the GetPolicy operation:」は AWS CLI（botocore の ClientError）が付ける前置き。
      - 「User: … is not authorized to perform: … on resource: … with an explicit deny in an identity-based policy」は従来の形式
        （IAM ユーザーガイド「アクセス拒否エラーメッセージのトラブルシューティング」）。
+     - 4 の部分を、記事と README は「拒否の理由」と呼ぶ。拒否の理由は、拒否したポリシーの種類と、明示的な拒否（with an explicit deny in …）か
+       暗黙的な拒否（because no … allows …）かを表す（IAM ユーザーガイド「アクセス拒否エラーメッセージのトラブルシューティング」）。
      - 2026-01-21 の What's New: 同じアカウントでは、拒否したポリシーの ARN をメッセージに含める
        （SCP・RCP・ID ベースポリシー・セッションポリシー・アクセス許可の境界）。インラインポリシーには ARN が無い。
        ハンズオン用ロールには Deny が 2 つ（インラインと管理ポリシー）あり、どちらが表示されるかは未確認のため、4 の注釈に「ARN が続くこともある」と書く。
+     - 5 の「拒否直後は表示されないことがある」: 評価の詳細は、エラーを返す処理とは別に、少し遅れて記録される
+       （User Guide「If a call to GetRequestAuthorizationDetails returns a not-found response, wait a short time and try again.」、ファクトシート 056、README 手順 3）。
      - 末尾の「Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID> for complete details,
        or call the GetRequestAuthorizationDetails API with the following authorization id: <ID>」は、公開されている CI のログの実例と
        IAM ユーザーガイド troubleshoot_access-denied-authorization-id の文例による。URL の末尾と authorization ID は同じ文字列。
@@ -75,13 +79,13 @@ policy/<strong>aws-deepcuts-certificate</strong></td>
       </tr>
       <tr>
         <td class="m">with an <strong>explicit deny</strong> in an <strong>identity-based policy</strong>.</td>
-        <td><div class="a"><i>4</i><b>拒否したポリシーの種類</b><span>ID ベースポリシーの明示的な拒否。<br>ポリシーの ARN が続くこともある</span></div></td>
+        <td><div class="a"><i>4</i><b>拒否の理由</b><span>拒否したポリシーの種類と、<br>明示的な拒否か暗黙的な拒否か。<br>ポリシーの ARN が続くこともある</span></div></td>
       </tr>
       <tr class="hot">
         <td class="m">Go to https://us-east-1.console.aws.amazon.com
 /iam/home?region=us-east-1#/authorization-details/
 <b>0example1authorization2id</b> for complete details,</td>
-        <td><div class="a"><i>5</i><b>Access Troubleshooter の URL</b><span>管理者がブラウザで開くと、<br>評価の詳細が表示される</span></div></td>
+        <td><div class="a"><i>5</i><b>Access Troubleshooter の URL</b><span>管理者がブラウザで開くと、<br>評価の詳細が表示される。<br>拒否直後は表示されないことがある</span></div></td>
       </tr>
       <tr class="hot">
         <td class="m">or call the GetRequestAuthorizationDetails API
@@ -98,7 +102,10 @@ window.addEventListener('load', async () => {
   await document.fonts.ready;
   // 注記はカードの下に置く
   const card = document.getElementById('msg');
-  document.getElementById('note').style.top = (card.offsetTop + card.offsetHeight + 10) + 'px';
+  const note = document.getElementById('note');
+  note.style.top = (card.offsetTop + card.offsetHeight + 10) + 'px';
+  // 図の高さは、注記の下端に余白を足して決める
+  document.getElementById('fig').style.height = (note.offsetTop + note.offsetHeight + 9) + 'px';
   document.body.dataset.ready = '1';
 });
 </script>

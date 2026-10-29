@@ -19,7 +19,7 @@ AWS Deep Cutsは、AWS の最新のサービスやニッチな機能、または
 # そもそもAccessDeniedの原因はなぜ分かりにくいのか？
 AWS の API を呼び出したときに、IAM（AWS Identity and Access Management）がリクエストを拒否すると、`AccessDenied` のエラーが返ります。このエラーの原因を特定するのは、簡単ではありません。IAM がリクエストを許可するかどうかは、1 つのポリシーだけでは決まらないからです。
 
-ポリシーの種類を説明する前に、この記事で使う用語を 2 つ定義します。AWS にリクエストを送る IAM ユーザーや IAM ロールを、**プリンシパル**と呼びます。プリンシパルがロールに切り替えると、AWS STS（AWS Security Token Service）が、そのロールの一時的な認証情報を発行します。この一時的な認証情報を使って行う一連の操作を、**セッション**と呼びます。セッションには、名前とタグを付けられます。
+ポリシーの種類を説明する前に、この記事で使う用語を 2 つ定義します。AWS にリクエストを送る IAM ユーザーや IAM ロールを、**プリンシパル**と呼びます。プリンシパルがロールに切り替えると、AWS STS（AWS Security Token Service）が、そのロールの一時的な認証情報を発行します。この一時的な認証情報を使って行う一連の操作を、**セッション**と呼びます。セッションには、名前と、キーと値の組であるタグを付けられます。
 
 プリンシパルの権限を決めるポリシーには、次の種類があります。
 
@@ -33,9 +33,11 @@ AWS の API を呼び出したときに、IAM（AWS Identity and Access Manageme
 | RCP（リソースコントロールポリシー） | AWS Organizations の組織やアカウント | アカウント内のリソースに対して行える操作の上限を定める | 許可を絞る |
 | VPC エンドポイントポリシー | VPC エンドポイント | そのエンドポイントを通る操作の上限を定める | 許可を絞る |
 
-ID ベースポリシーには、独立したポリシーとして作成して複数のユーザーやロールにアタッチできる**管理ポリシー**と、1 つのユーザーやロールの中に直接書き込む**インラインポリシー**があります。また、表の SCP と RCP を設定する AWS Organizations は、複数の AWS アカウントを 1 つの**組織**としてまとめて管理するサービスです。
+表の SCP と RCP を設定する AWS Organizations は、複数の AWS アカウントを 1 つの**組織**としてまとめて管理するサービスです。
 
-これらのポリシーの種類を、すべて覚える必要はありません。押さえてほしいのは、ポリシーには「許可を与えるポリシー」と「許可を絞るポリシー」があり、IAM がそれらを決まった順序で評価して、許可か拒否かを決めることです。
+ポリシーは、作成のしかたによって、**管理ポリシー**と**インラインポリシー**にも分かれます。管理ポリシーは、独立して作成し、複数のユーザーやロールにアタッチできるポリシーです。インラインポリシーは、1 つのユーザーやロールの中に直接書き込むポリシーです。
+
+表のポリシーの種類を、すべて覚える必要はありません。押さえてほしいのは、ポリシーには「許可を与えるポリシー」と「許可を絞るポリシー」があり、IAM がそれらを決まった順序で評価して、許可か拒否かを決めることです。
 
 ポリシーは、1 つ以上の**ステートメント**からなります。ステートメントは、ポリシーの中の 1 つの規則です。ステートメントには、許可するか拒否するかを表す Effect、対象の操作を表す Action、対象のリソースを表す Resource を書きます。Action には、IAM のポリシーの情報を取得する操作を表す `iam:GetPolicy` のように、サービスの名前と操作の名前をつなげた**アクション**を書きます。
 
@@ -43,9 +45,11 @@ ID ベースポリシーには、独立したポリシーとして作成して�
 
 Effect の値は Allow か Deny で、この記事では、この値をステートメントの**効果**と呼びます。ステートメントがリクエストに**一致する**とは、ステートメントの Action と Resource がリクエストの操作と対象に当てはまり、Condition があればその条件も満たすことを指します。
 
+ステートメントを並べたポリシーの内容を、この記事では**ポリシーの本文**と呼びます。IAM コンソールは、ポリシーの本文を JSON で表示します。
+
 ポリシーの種類の表で「許可を与える」に分類した ID ベースポリシーにも、効果が Deny のステートメントを書けます。2 つの分類は、Allow の働きが異なります。許可を与えるポリシーの Allow は、操作を許可します。許可を絞るポリシーの Allow は、操作を許可するのではなく、許可できる範囲の上限を定めます。そのため、許可を絞るポリシーを設定した場合は、そのポリシーにも、リクエストに一致する Allow が必要です。
 
-IAM がポリシーを評価する順序を簡略化すると、次の図のようになります。
+IAM がポリシーを評価する順序を簡略化すると、次の図のようになります。図の問い 1〜3 は、下の説明の 1〜3 と対応しています。
 
 ![IAM がポリシーを評価する順序](https://github.com/AWS-Deep-Cuts/aws-iam-toolbox/raw/main/img/evaluation-flow.png)
 
@@ -68,7 +72,7 @@ AWS は、エラーメッセージに含める情報を、次の表のように�
 
 それでも、エラーメッセージには限界があります。公式ドキュメントによると、複数の種類のポリシーが拒否している場合でも、エラーメッセージに含まれるのは、そのうち 1 種類だけです。また、どのステートメントが一致したのかも、条件の評価に使われた値も、メッセージからは分かりません。条件の評価に使われた値とは、たとえばロールのタグや、送信元の IP アドレスです。
 
-そこで、2026 年 8 月から、IAM は、対応している API で拒否したリクエストのエラーメッセージに、**authorization ID** を付けるようになりました。authorization ID は、拒否されたリクエストを 1 件ずつ識別するための ID です。この ID で照会すると、IAM がそのリクエストをどう評価したかの記録を確認できます。この記事では、この記録を**評価の詳細**と呼びます。authorization ID で評価の詳細を照会するための機能が、次の章で説明する IAM Access Troubleshooter です。
+そこで、2026 年 8 月から、IAM は、対応している API で拒否したリクエストのエラーメッセージに、**authorization ID** を付けるようになりました。authorization ID は、IAM が拒否したリクエストを 1 件ずつ識別する ID です。この ID で照会すると、IAM がそのリクエストをどう評価したかの記録を確認できます。この記事では、この記録を**評価の詳細**と呼びます。authorization ID で評価の詳細を照会するための機能が、次の章で説明する IAM Access Troubleshooter です。
 
 # IAM Access Troubleshooterとは？
 IAM Access Troubleshooter は、拒否された 1 つのリクエストについて、IAM がどのポリシーをどう評価したのかを表示する機能です。2026 年 8 月から、プレビューとして提供されています。公式ドキュメントによると、2026 年 10 月時点で authorization ID が付くのは、IAM の大半の API です。
@@ -91,7 +95,7 @@ API と AWS CLI では、この機能は IAM Toolbox という名前で提供さ
 ![拒否から照会までの流れ](https://github.com/AWS-Deep-Cuts/aws-iam-toolbox/raw/main/img/troubleshooter-flow.png)
 
 1. プリンシパルが、AWS の API を呼び出します。
-2. IAM がポリシーを評価し、リクエストを拒否します。
+2. IAM がポリシーを評価して、リクエストを拒否します。
 3. IAM は、authorization ID と Access Troubleshooter の URL を付けたエラーメッセージを、プリンシパルに返します。
 4. IAM は、エラーを返す処理とは別に、評価の詳細を、拒否が起きたリージョンに記録します。記録が終わるまでに、少し時間がかかることがあります。API リファレンスによると、記録された評価の詳細は、拒否から少なくとも 24 時間は照会できます。
 5. 管理者は、3 の URL を開くか API を呼び出して、authorization ID で評価の詳細を照会します。照会には、`iam:GetRequestAuthorizationDetails` の権限が必要です。
@@ -99,7 +103,7 @@ API と AWS CLI では、この機能は IAM Toolbox という名前で提供さ
 
 公式ドキュメントによると、対応している API で拒否されると、通常は、エラーメッセージの最後に Access Troubleshooter の URL と authorization ID が付きます。
 
-次の例は、記事の最後で紹介するハンズオンで、AWS CloudShell に表示されるエラーメッセージの形です。AWS CloudShell は、マネジメントコンソールにサインインしたユーザーの権限で、ブラウザから AWS CLI のコマンドを実行できる環境です。ハンズオンでは、あなたが CloudShell で IAM ロール `aws-deepcuts-handson-role` に切り替えて、管理ポリシー `aws-deepcuts-certificate` の情報を IAM の `GetPolicy` API で取得しようとし、IAM がそのリクエストを拒否します。この記事では、このロールを**ハンズオン用ロール**、このポリシーを**修了証のポリシー**と呼びます。修了証のポリシーの説明文には、ハンズオンの修了証が書かれています。authorization ID、アカウント ID、セッション名は説明用の値です。
+次の例は、記事の最後で紹介するハンズオンで、AWS CloudShell に表示されるエラーメッセージのうち、AWS CLI が先頭に付ける `An error occurred (AccessDenied) when calling the GetPolicy operation:` に続く部分の形です。AWS CloudShell は、マネジメントコンソールにサインインしたユーザーの権限で、ブラウザから AWS CLI のコマンドを実行できる環境です。ハンズオンでは、あなたが CloudShell で IAM ロール `aws-deepcuts-handson-role` に切り替えて、管理ポリシー `aws-deepcuts-certificate` の情報を IAM の `GetPolicy` API で取得しようとし、IAM がそのリクエストを拒否します。この記事では、このロールを**ハンズオン用ロール**、このポリシーを**修了証のポリシー**と呼びます。修了証のポリシーの説明文には、ハンズオンの修了証が書かれています。authorization ID、アカウント ID、セッション名は説明用の値です。
 
 ```text
 User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012 is not authorized to perform: iam:GetPolicy on resource: policy arn:aws:iam::111122223333:policy/aws-deepcuts-certificate with an explicit deny in an identity-based policy. Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/0example1authorization2id for complete details, or call the GetRequestAuthorizationDetails API with the following authorization id: 0example1authorization2id
@@ -107,7 +111,7 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 
 メッセージの中ほどの `with an explicit deny in an identity-based policy` は、ID ベースポリシーによる明示的な拒否であることを示します。ID ベースポリシーに、リクエストに一致する Allow が無いことによる暗黙的な拒否の場合は、この部分が `because no identity-based policy allows the iam:GetPolicy action` のような形になります。この記事では、この部分を**拒否の理由**と呼びます。原因が管理ポリシーの場合は、`identity-based policy` の後ろに `: <ポリシーの ARN>` が付くことがあります。インラインポリシーには ARN が無いため、ARN は付きません。
 
-メッセージの各部分の意味は、次の図のとおりです。拒否の理由は、図の 4 に当たります。
+メッセージの各部分の意味は、次の図のとおりです。図の先頭の行は、前の段落で説明した、AWS CLI が付ける部分です。拒否の理由は、図の 4 に当たります。
 
 ![AccessDenied のエラーメッセージの読み方](https://github.com/AWS-Deep-Cuts/aws-iam-toolbox/raw/main/img/error-message.png)
 
@@ -122,7 +126,7 @@ Access Troubleshooter には、以下のような特徴があります。
 
 2026 年 10 月時点のプレビューには、次の制約があります。
 
-- 2026 年 8 月 25 日の AWS SDK と AWS CLI のリリースノートによると、プレビューを提供するリージョンは、バージニア北部（us-east-1）だけです。公式ドキュメントは、対応する API とリージョンを順次広げていると説明しています。筆者が 2026 年 10 月に確認した範囲では、東京リージョンでの提供の発表は見つかりませんでした。
+- 2026 年 8 月 25 日の AWS SDK と AWS CLI の変更履歴によると、プレビューを提供するリージョンは、バージニア北部（us-east-1）だけです。公式ドキュメントは、対応する API とリージョンを順次広げていると説明しています。筆者が 2026 年 10 月に確認した範囲では、東京リージョンでの提供の発表は見つかりませんでした。
 - 公式ドキュメントによると、対応している API でも、次のリクエストには authorization ID が付かないことがあります。
   - 評価の対象になるポリシーが多すぎて、IAM が評価の詳細を記録できないリクエスト
   - AWS のサービスがプリンシパルの代わりに行ったリクエスト
@@ -142,18 +146,22 @@ aws iam-toolbox get-request-authorization-details \
 
 次の図は、応答の JSON の形を示すために、API の仕様をもとに作成した説明用の例です。図の値は、前の章のエラーメッセージの例で示した拒否について、評価の詳細を取得したときを想定しています。一部の値は「…」で省略しています。
 
-ハンズオンでは、この拒否の原因として、ハンズオン用ロールに、修了証のポリシーの読み取りを拒否するステートメントを持つポリシーが 2 つ設定されています。1 つはロールの中に直接書き込まれたインラインポリシーで、もう 1 つはロールにアタッチされた管理ポリシー `aws-deepcuts-managed-deny` です。`aws-deepcuts-managed-deny` の中で読み取りを拒否するステートメントの Sid は、`DenyReadCertificate` です。また、ハンズオン用ロールには、アクセス許可の境界として管理ポリシー `aws-deepcuts-boundary` が設定されています。ロールには、キーが `team`、値が `dev` のタグも付いています。図のリクエストのコンテキストにある `aws:PrincipalTag/team` は、リクエストを送ったプリンシパルに付いているタグ `team` の値を表す条件キーです。
+ハンズオンでは、この拒否の原因として、ハンズオン用ロールに、修了証のポリシーの読み取りを拒否するステートメントを持つポリシーが 2 つ設定されています。1 つはロールの中に直接書き込まれたインラインポリシーで、もう 1 つはロールにアタッチされた管理ポリシー `aws-deepcuts-managed-deny` です。`aws-deepcuts-managed-deny` の中で読み取りを拒否するステートメントの Sid は、`DenyReadCertificate` です。また、ハンズオン用ロールには、アクセス許可の境界として管理ポリシー `aws-deepcuts-boundary` が設定されています。ロールには、キーが `team`、値が `dev` のタグも付いています。
 
-![評価の詳細の 4 つの部分](https://github.com/AWS-Deep-Cuts/aws-iam-toolbox/raw/main/img/response-anatomy.png)
+図のリクエストのコンテキストにある `aws:PrincipalTag/team` は、リクエストを送ったプリンシパルに付いているタグ `team` の値を表す条件キーです。同じ図の `aws:RequestedRegion` は、リクエスト先のリージョンを表す条件キーです。`aws:SecureTransport` は、リクエストが TLS（Transport Layer Security）で暗号化された接続で送られたかどうかを表す条件キーです。リクエストのコンテキストに含まれる条件キーは、サービスとリクエストの種類によって異なります。
+
+![評価の詳細の 4 つの項目](https://github.com/AWS-Deep-Cuts/aws-iam-toolbox/raw/main/img/response-anatomy.png)
+
+応答の `evaluations` は、アクションとリソースの組ごとの評価を並べた配列です。図の右の列と次の表にある `evaluations[]` は、この配列の各要素を表します。たとえば、`evaluations[].evaluatedEffect` は、各要素の中の `evaluatedEffect` です。
 
 | 応答の項目 | この記事での呼び名 | 内容 | 原因を調べるときの使い方 |
 | --- | --- | --- | --- |
 | `requestContext` | リクエストのコンテキスト | リクエスト全体に共通する条件キーとその値。アクションとリソースの組ごとの値は、`evaluations[].context` に含まれる | ステートメントの Condition を、リクエストが満たしたかどうかを確かめる |
-| `evaluations[].evaluatedEffect` | 判定 | アクションとリソースの組ごとの結果。`ALLOW`、`EXPLICIT_DENY`、`IMPLICIT_DENY` のいずれか | 明示的な拒否か、暗黙的な拒否かを確かめる |
+| `evaluations[].evaluatedEffect` | 判定 | アクションとリソースの組ごとの評価の結論。`ALLOW`、`EXPLICIT_DENY`、`IMPLICIT_DENY` のいずれか | 明示的な拒否か、暗黙的な拒否かを確かめる |
 | `evaluations[].matchedPolicies` | 一致したポリシー | 評価で一致したポリシーと、一致したステートメントの Sid と効果 | 明示的な拒否の原因を確かめる。API リファレンスによると、暗黙的な拒否では一致したポリシーは返らない |
 | `policies` | 評価されたポリシー | 評価の対象になったすべてのポリシー。ポリシーごとに、種類、インラインかどうか、ポリシーを識別する `uri`、アタッチされている先が含まれる | 暗黙的な拒否のときに、評価されたポリシーの種類から、Allow が足りない可能性のあるポリシーを絞り込む |
 
-応答は、一致したポリシーと評価されたポリシーのどちらでも、各ポリシーを `uri` で識別します。一致したポリシーの `uri` と同じ `uri` を持つ評価されたポリシーを探すと、そのポリシーの種類と、アタッチされている先が分かります。API の仕様では、管理ポリシーの `uri` はポリシーの ARN です。インラインポリシーは ARN を持たないため、`uri` には識別子が入ります。API リファレンスの例と第三者の観測では、この識別子は、図の `inline:…` のように `inline:` で始まります。この識別子はポリシーの名前ではないため、インラインポリシーは、アタッチされている先と、一致したステートメントの Sid から特定します。
+応答は、一致したポリシーと評価されたポリシーのどちらでも、各ポリシーを `uri` で識別します。一致したポリシーの `uri` と同じ `uri` を持つ評価されたポリシーを探すと、そのポリシーの種類と、アタッチされている先が分かります。API の仕様では、管理ポリシーの `uri` はポリシーの ARN です。インラインポリシーは ARN を持たないため、`uri` には識別子が入ります。API リファレンスの例では、この識別子は、図の `inline:…` のように `inline:` で始まります。この識別子はポリシーの名前ではないため、インラインポリシーは、アタッチされている先と、一致したステートメントの Sid から特定します。
 
 応答には、ポリシーの本文は含まれません。ステートメントの中身は、ポリシーの種類の表の「設定する場所」で確認します。たとえば、ID ベースポリシーとアクセス許可の境界は、IAM コンソールでポリシーを開いて確認します。
 
@@ -170,9 +178,9 @@ aws iam-toolbox get-request-authorization-details \
 | --- | --- | --- | --- |
 | 1 | 評価された ID ベースポリシーの中に、その操作を許可する Allow のステートメントがあるか。評価の詳細にはポリシーの本文が無いため、IAM コンソールでポリシーを開いて確かめる | 許可するポリシーが無い | その操作を許可する Allow のステートメントを持つポリシーをアタッチするか、ポリシーに追加する |
 | 2 | 順序 1 で見つけた Allow のステートメントに Condition があれば、その条件を、リクエストのコンテキストの値が満たしているか | 条件を満たしていない | ポリシーの Condition を修正するか、ロールのタグなど、リクエストの側の設定を修正する |
-| 3 | 許可を絞るポリシーにも、同じ操作の Allow があるか | 許可を絞るポリシーに、一致する Allow が無い | そのポリシーに Allow を追加する |
+| 3 | 許可を絞るポリシーにも、その操作に一致する Allow のステートメントがあるか | 許可を絞るポリシーに、一致する Allow が無い | そのポリシーに Allow を追加する |
 
-エラーメッセージの拒否の理由も、原因を絞り込む手がかりになります。たとえば、拒否の理由が `because no identity-based policy allows` であれば、原因は上の表の順序 1 か 2 で見つかります。拒否の理由が `because no permissions boundary allows` であれば、原因はアクセス許可の境界で、表の順序 3 に当たります。ただし、先に説明したとおり、複数の種類のポリシーが拒否している場合でも、エラーメッセージに含まれるのは、そのうち 1 種類だけです。そのため、順序 1 か 2 の原因を修正した後に、順序 3 の原因で拒否されることもあります。
+エラーメッセージの拒否の理由も、原因を絞り込むのに役立ちます。たとえば、拒否の理由が `because no identity-based policy allows` であれば、原因は上の表の順序 1 か 2 で見つかります。拒否の理由が `because no permissions boundary allows` であれば、原因はアクセス許可の境界で、表の順序 3 に当たります。ただし、先に説明したとおり、複数の種類のポリシーが拒否している場合でも、エラーメッセージに含まれるのは、そのうち 1 種類だけです。そのため、順序 1 か 2 の原因を修正した後に、順序 3 の原因で拒否されることもあります。
 
 :::note info
 **authorization ID だけでは評価の詳細を確認できない**
@@ -222,6 +230,7 @@ Access Troubleshooter を使うと、明示的な拒否では原因のポリシ�
 参考文献
 1. [authorization ID を使ってアクセス拒否のエラーを調べる（Troubleshoot access denied error messages with authorization ID (Preview)）](https://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_access-denied-authorization-id.html)
 1. [GetRequestAuthorizationDetails の API リファレンス（IAM Toolbox API Reference）](https://docs.aws.amazon.com/iam-toolbox/latest/APIReference/API_GetRequestAuthorizationDetails.html)
+1. [AWS CLI v2 の変更履歴（AWS CLI v2 CHANGELOG）](https://github.com/aws/aws-cli/blob/v2/CHANGELOG.rst)
 1. [ポリシーの評価論理（Policy evaluation logic）](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html)
 1. [アクセス拒否のエラーメッセージのトラブルシューティング（Troubleshoot access denied error messages）](https://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_access-denied.html)
 1. [AWS Identity and Access Management により、AWS のアクセス拒否のエラーを効率よく調べられるようになった（AWS Identity and Access Management now makes it more efficient to troubleshoot access denied errors in AWS）](https://aws.amazon.com/about-aws/whats-new/2021/11/aws-identity-access-management-efficient-troubleshoot-error/)

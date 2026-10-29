@@ -75,11 +75,14 @@
     return '';
   };
 
-  // 各ステージの修正。管理者が IAM コンソールで行う操作（README の「修正の手順（IAM コンソール）」）
+  // 各ステージの修正。管理者が IAM コンソールで行う操作（README の「IAM コンソールで修正する手順」）。
+  // after は、修正の後に CloudShell で行う操作。修正の箱（管理者が IAM コンソールで行う操作）には入れず、箱の下に灰色の注記として描く。
+  // ステージ 3 では、README のとおり、タグを変更した後に CloudShell でハンズオン用ロールに切り替え直してから読み取りを試す
   const FIX = {
     1: { rows: ['r1', 'r2'], title: '2 つともロールから削除する', sub: '「許可」タブで 2 つを選択し、<br>「削除」を選ぶ' },
     2: { rows: ['r3'], title: 'ロールにアタッチする', sub: '「許可を追加」から<br>「ポリシーをアタッチ」を選ぶ' },
-    3: { rows: ['r4'], title: 'タグ <span class="m">team</span> の値を<br><span class="m">security</span> に変更する', sub: '「タグ」タブで変更し、<br>CloudShell でロールに切り替え直す' },
+    3: { rows: ['r4'], title: 'タグ <span class="m">team</span> の値を<br><span class="m">security</span> に変更する', sub: '「タグ」タブで変更する',
+         after: '変更後は、CloudShell でロールに<br>切り替え直してから読み取りを試す' },
     4: { rows: ['r5'], title: '<span class="m">iam:GetPolicy</span> を追加する', sub: 'ポリシーの「編集」で、<br><span class="m">Action</span> の配列に追加する' },
   };
 
@@ -152,6 +155,9 @@
   .fix > span { display: block; font-size: 16px; font-weight: 500; line-height: 1.45; margin-top: 4px; }
   .fix > span .m { font-family: var(--font-mono); font-weight: 800; font-size: 15px; }
   .fix > b, .fix > span { white-space: nowrap; }
+  /* 修正の後に CloudShell で行う操作の注記。修正の箱の下に置き、左の縦線を箱の左端にそろえる */
+  .after { position: absolute; left: ${RX}px; width: ${800 - RX}px; border-left: 3px solid var(--line); padding-left: 12px;
+           font-size: 16px; font-weight: 500; line-height: 1.45; color: #4a4843; white-space: nowrap; }
 
   /* 修了証のポリシー */
   .cert { position: absolute; left: ${CERT_X}px; top: 0; height: ${TAB_H}px; display: flex; align-items: center; gap: 10px; }
@@ -205,6 +211,8 @@
   if (fix) {
     // 1 行のときは、箱の上端を原因の行の上端にそろえる。2 行にまたがるときの位置は、文字の大きさが決まった後に決める
     html += `<div class="fix" id="fix" style="top:${top[fix.rows[0]]}px"><i>管理者が IAM コンソールで修正</i><b>${fix.title}</b><span>${fix.sub}</span></div>`;
+    // 縦の位置は、修正の箱の大きさが決まった後に決める
+    if (fix.after) html += `<div class="after" id="after">${fix.after}</div>`;
   }
 
   html += `<div class="legend" style="top:${LEGEND_Y}px"><span><span class="stg">ステージ N</span>ハンズオンで、これが拒否の原因になるステージ</span></div>`;
@@ -240,6 +248,11 @@
       el.style.height = `${h}px`;
       el.style.top = `${Math.round((c0 + c1) / 2 - h / 2)}px`;
       el.style.display = 'flex'; el.style.flexDirection = 'column'; el.style.justifyContent = 'center';
+    }
+    // 修正の後の操作の注記を、修正の箱の下端から 12px 下に置く
+    if (fix && fix.after) {
+      const el = document.getElementById('fix');
+      document.getElementById('after').style.top = `${el.offsetTop + el.offsetHeight + 12}px`;
     }
     // ロールとして、修了証のポリシーに iam:GetPolicy を呼び出す。どの図でも拒否される
     wire('#tab', '#cert', { from: 'r', to: 'l', hot: true });

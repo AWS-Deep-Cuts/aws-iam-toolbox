@@ -2,17 +2,20 @@
 <html lang="ja"><head><meta charset="utf-8">
 <!-- ハンズオンの構成図（README の「構築するアーキテクチャ」、記事の「ハンズオンはこちら！」）。
      左の枠は、あなた（管理者）が操作する 2 つの画面。右の枠は AWS アカウントの中で使うもの。
-     上から順に、手順 2（CloudShell でロールに切り替え、修了証のポリシーを読み取る）、手順 3（コンソールで ID を照会する）、手順 4（コンソールで設定を修正する）。
+     上から順に、手順 2（CloudShell でロールに切り替え、修了証のポリシーを読み取る）、手順 3（コンソールで authorization ID を使って評価の詳細を照会する）、手順 4（コンソールで設定を修正する）。
+     線のラベルは 2 行にする。1 行目が手順の番号、2 行目が操作。手順 3 の ID は、GLOSSARY-v3 の呼び名どおり「authorization ID」と書く。
+     ラベルを 1 行で収める幅が無いため、2 行にそろえ、Access Troubleshooter・AWS STS・ハンズオン用ロール・修了証のポリシーを右に寄せた。
      手順 1 は線にせず、AWS アカウントの枠の見出しの右に注記する（hands-on/setup.sh が、ハンズオン用ロールと 5 つのポリシーを作成する）。
      根拠:
        - 手順 2: hands-on/switch-role.sh が aws sts assume-role（IAM のアクション sts:AssumeRole）で、ハンズオン用ロール aws-deepcuts-handson-role の一時的な認証情報を取得する。
          STS からハンズオン用ロールへの縦の線の右にあるラベル「ロールの一時的な認証情報を発行する」は、このことを指す。STS は認証情報を CloudShell に返し、
-         以後の操作はハンズオン用ロールとして行われる。README 手順 2 の「CloudShell がハンズオン用ロールの一時的な認証情報を使うようになります」と同じ説明。
+         以後の操作はハンズオン用ロールとして行われる。README 手順 2 の「AWS CLI は、環境変数の認証情報を、CloudShell の管理者の認証情報より優先して使います」と同じ説明。
          信頼ポリシーは sts:AssumeRole と sts:TagSession を許可（hands-on/setup.sh）。
        - 読み取り: aws iam get-policy（アクション iam:GetPolicy）で、管理ポリシー aws-deepcuts-certificate の説明文を読む。ロールの設定で拒否される（setup.sh、設計書 v3 のステージの表）。
        - CloudShell の us-east-1: README の前提条件で、CloudShell をバージニア北部（us-east-1）で開く。Access Troubleshooter のプレビューも us-east-1。
        - 名前: 記事と README は「以降 Access Troubleshooter と呼ぶ」と決めているため、ノードの名前も Access Troubleshooter にする。IAM の機能であることはアイコンで示す。
-       - 手順 3: エラーメッセージのリンク https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID>。
+       - 手順 3: エラーメッセージの Access Troubleshooter の URL https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID>。
+         URL の末尾が authorization ID で、管理者はこの URL を開いて評価の詳細を照会する（README 手順 3）。
          API は IAM Toolbox の GetRequestAuthorizationDetails。プレビューは us-east-1（IAM User Guide「Troubleshoot access denied error messages with authorization ID (Preview)」、ファクトシート 007・012）。
        - 手順 4: IAM コンソールの、ロールの「許可」タブ・「タグ」タブと、ポリシーの編集（設計書 v3「コンソールの操作で使う画面の名前」）。
      アイコン: npm パッケージ aws-icons（User, AWSCloudShell, Client, AWSCloudlogo, AWSAccount, AWSIdentityAccessManagementAWSSTS,
@@ -53,8 +56,8 @@
   <div class="grp you" style="left:0;top:0;width:170px;height:520px">
     <div class="gl"><img src="../icons/User.svg" alt="">あなた・管理者</div>
   </div>
-  <div class="node" id="cs" style="left:5px;top:98px;width:160px"><img src="../icons/AWSCloudShell.svg" alt=""><div class="t">AWS CloudShell</div><div class="s code">us-east-1</div></div>
-  <div class="node" id="con" style="left:5px;top:222px;width:160px"><img src="../icons/Client.svg" alt=""><div class="t">マネジメント<br>コンソール</div><div class="s">ブラウザ</div></div>
+  <div class="node" id="cs" style="left:5px;top:110px;width:160px"><img src="../icons/AWSCloudShell.svg" alt=""><div class="t">AWS CloudShell</div><div class="s code">us-east-1</div></div>
+  <div class="node" id="con" style="left:5px;top:232px;width:160px"><img src="../icons/Client.svg" alt=""><div class="t">マネジメント<br>コンソール</div><div class="s">ブラウザ</div></div>
 
   <!-- 右：AWS アカウント -->
   <div class="grp" style="left:186px;top:0;width:614px;height:520px">
@@ -65,18 +68,19 @@
   </div>
   <div class="gnote" id="gn" style="left:388px;top:48px">手順 1 で、<code>setup.sh</code> がロールとポリシーを作成する</div>
 
-  <div class="node" id="sts" style="left:423px;top:98px;width:160px"><img src="../icons/AWSIdentityAccessManagementAWSSTS.svg" alt=""><div class="t">AWS STS</div><div class="s code">sts:AssumeRole</div></div>
-  <div class="node" id="ats" style="left:347px;top:222px;width:150px"><img src="../icons/AWSIdentityandAccessManagement.svg" alt=""><div class="t">Access<br>Troubleshooter</div><div class="s code">us-east-1</div></div>
-  <div class="node" id="role" style="left:418px;top:362px;width:170px"><img src="../icons/AWSIdentityAccessManagementRole.svg" alt=""><div class="t">ハンズオン用ロール</div><div class="s code">aws-deepcuts-<br>handson-role</div></div>
-  <div class="node" id="cert" style="left:620px;top:362px;width:160px"><img src="../icons/AWSIdentityAccessManagementPermissions.svg" alt=""><div class="t">修了証のポリシー</div><div class="s code">aws-deepcuts-<br>certificate</div></div>
+  <div class="node" id="sts" style="left:436px;top:110px;width:160px"><img src="../icons/AWSIdentityAccessManagementAWSSTS.svg" alt=""><div class="t">AWS STS</div><div class="s code">sts:AssumeRole</div></div>
+  <div class="node" id="ats" style="left:370px;top:232px;width:150px"><img src="../icons/AWSIdentityandAccessManagement.svg" alt=""><div class="t">Access<br>Troubleshooter</div><div class="s code">us-east-1</div></div>
+  <div class="node" id="role" style="left:431px;top:362px;width:170px"><img src="../icons/AWSIdentityAccessManagementRole.svg" alt=""><div class="t">ハンズオン用ロール</div><div class="s code">aws-deepcuts-<br>handson-role</div></div>
+  <div class="node" id="cert" style="left:629px;top:362px;width:150px"><img src="../icons/AWSIdentityAccessManagementPermissions.svg" alt=""><div class="t">修了証のポリシー</div><div class="s code">aws-deepcuts-<br>certificate</div></div>
 
   <!-- 線のラベル -->
-  <div class="lbl step" id="l2" style="left:214px;top:100px"><b>手順 2:</b> ロールに切り替える</div>
-  <div class="lbl step" id="l3" style="left:214px;top:218px"><b>手順 3:</b> ID で照会する</div>
-  <div class="lbl step" id="l4" style="left:214px;top:364px"><b>手順 4:</b> 設定を修正する</div>
-  <div class="lbl two" id="lsts" style="left:516px;top:260px">ロールの一時的な<br>認証情報を発行する</div>
-  <div class="lbl deny code" id="lg" style="left:541px;top:362px">iam:GetPolicy</div>
-  <div class="lbl deny" id="ld" style="left:559px;top:394px">拒否される</div>
+  <!-- 手順のラベルは 2 行。下端を矢印から 9px 上にする（矢印の高さ: 手順 2 は 138px、手順 3 は 260px、手順 4 は 390px） -->
+  <div class="lbl step two" id="l2" style="left:208px;top:85px"><b>手順 2</b><br>ロールに切り替える</div>
+  <div class="lbl step two" id="l3" style="left:208px;top:207px"><b>手順 3</b><br>authorization ID で照会する</div>
+  <div class="lbl step two" id="l4" style="left:208px;top:337px"><b>手順 4</b><br>設定を修正する</div>
+  <div class="lbl two" id="lsts" style="left:529px;top:267px">ロールの一時的な<br>認証情報を発行する</div>
+  <div class="lbl deny code" id="lg" style="left:548px;top:362px">iam:GetPolicy</div>
+  <div class="lbl deny" id="ld" style="left:566px;top:394px">拒否される</div>
 </div>
 <script>
 window.addEventListener('load', async () => { await document.fonts.ready;
