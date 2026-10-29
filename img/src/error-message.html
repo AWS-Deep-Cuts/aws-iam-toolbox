@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <!-- AccessDenied のエラーメッセージ 1 行を、部分ごとに分けて注釈する図（README 手順 2・記事）。
-     例文は説明用の例。アカウント ID 111122223333 と authorization ID 4q9znmckeu91fue10fy83dmze は架空の値。
+     例文は説明用の例。アカウント ID 111122223333・セッション名 handson-153012・authorization ID 0example1authorization2id は説明用の値で、
+     README 手順 2 と記事の例文と同じ。authorization ID は API モデルの pattern [0-9a-z]+ に合わせた 25 文字の文字列で、実在の ID ではない。
      根拠:
      - 先頭の「An error occurred (AccessDenied) when calling the GetPolicy operation:」は AWS CLI（botocore の ClientError）が付ける前置き。
      - 「User: … is not authorized to perform: … on resource: … with an explicit deny in an identity-based policy」は従来の形式
@@ -12,12 +13,13 @@
      - 末尾の「Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/<ID> for complete details,
        or call the GetRequestAuthorizationDetails API with the following authorization id: <ID>」は、公開されている CI のログの実例と
        IAM ユーザーガイド troubleshoot_access-denied-authorization-id の文例による。URL の末尾と authorization ID は同じ文字列。
-     - セッション名 handson-1 は説明用。switch-role.sh は handson-<時分秒> の名前でロールに切り替える。 -->
+     - セッション名 handson-153012 は説明用。switch-role.sh は handson-$(date +%H%M%S) の名前でロールに切り替える。
+     - 注記の「改行の無い 1 行」: AWS CLI はメッセージを改行せずに 1 行で出力し、画面の幅で折り返して表示される（README 手順 2）。 -->
 <link rel="stylesheet" href="diagram.css">
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 668px; }
+  #fig { width: 800px; height: 692px; }
   .card { left: 0; top: 0; width: 800px; }
   .card > .h { display: flex; align-items: center; gap: 10px; padding: 7px 12px; }
   .card > .h img { width: 28px; height: 28px; }
@@ -44,7 +46,7 @@
   .seg tr.hot .a i { background: var(--hot); }
   .seg tr.hot .a b { color: var(--hot); }
 
-  .note { position: absolute; left: 0; width: 800px; font-size: 16px; font-weight: 500; line-height: 1.5; }
+  .note { position: absolute; left: 0; width: 800px; padding-left: 12px; font-size: 16px; font-weight: 500; line-height: 1.5; }
 </style>
 </head><body>
 <div id="fig">
@@ -59,8 +61,8 @@ the GetPolicy operation:</td>
       </tr>
       <tr>
         <td class="m">User: arn:aws:sts::111122223333:assumed-role/
-<strong>aws-deepcuts-handson-role</strong>/handson-1</td>
-        <td><div class="a"><i>1</i><b>拒否されたプリンシパル</b><span>ハンズオン用ロールのセッション。<br>handson-1 はセッション名</span></div></td>
+<strong>aws-deepcuts-handson-role</strong>/handson-153012</td>
+        <td><div class="a"><i>1</i><b>拒否されたプリンシパル</b><span>ハンズオン用ロールのセッション。<br>handson-153012 はセッション名</span></div></td>
       </tr>
       <tr>
         <td class="m">is not authorized to perform: <strong>iam:GetPolicy</strong></td>
@@ -78,18 +80,18 @@ policy/<strong>aws-deepcuts-certificate</strong></td>
       <tr class="hot">
         <td class="m">Go to https://us-east-1.console.aws.amazon.com
 /iam/home?region=us-east-1#/authorization-details/
-<b>4q9znmckeu91fue10fy83dmze</b> for complete details,</td>
+<b>0example1authorization2id</b> for complete details,</td>
         <td><div class="a"><i>5</i><b>Access Troubleshooter の URL</b><span>管理者がブラウザで開くと、<br>評価の詳細が表示される</span></div></td>
       </tr>
       <tr class="hot">
         <td class="m">or call the GetRequestAuthorizationDetails API
 with the following authorization id:
-<b>4q9znmckeu91fue10fy83dmze</b></td>
+<b>0example1authorization2id</b></td>
         <td><div class="a"><i>6</i><b>authorization ID</b><span>URL の末尾と同じ文字列。<br>API で照会するときに使う</span></div></td>
       </tr>
     </table>
   </div>
-  <div class="note" id="note">実際は 1 行で表示される。ここでは部分ごとに改行した。アカウント ID と authorization ID は架空の値。</div>
+  <div class="note" id="note">実際は改行の無い 1 行のメッセージで、画面の幅で折り返して表示される。<br>ここでは部分ごとに改行した。アカウント ID・セッション名・authorization ID は説明用の値。</div>
 </div>
 <script>
 window.addEventListener('load', async () => {

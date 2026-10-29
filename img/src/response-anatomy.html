@@ -2,6 +2,10 @@
 <html lang="ja"><head><meta charset="utf-8">
 <!-- GetRequestAuthorizationDetails の応答の 4 つの部分（記事の「仕組み」・README 手順 3）。
      JSON は説明用に短くした例。値はハンズオンのステージ 1（明示的な拒否）を想定し、ARN の前半を「…」で省略した。
+     ステージ 1 のロールには、インラインポリシー aws-deepcuts-inline-deny・管理ポリシー aws-deepcuts-managed-deny・アクセス許可の境界
+     aws-deepcuts-boundary の 3 つが付いている（hands-on/setup.sh）。policies には 3 つとも描き、matchedPolicies は管理ポリシーの 1 つだけを描いて、
+     残りを灰色の「…」で省略した。インラインポリシーの uri は不透明な識別子で、観測では inline: で始まる
+     （API モデルの MatchedPolicy.uri の説明、API リファレンスのサンプル、HackTricks の実測。ファクトシート 043）。
      構造の根拠: botocore のモデル iam-toolbox/2018-05-10/service-2.json の GetRequestAuthorizationDetailsOutput
        - requestContext: map。「リクエスト全体に共通し、すべての評価で共有される条件キーと値」
        - evaluations[]: Evaluation { action, resource, context, evaluatedEffect (ALLOW | EXPLICIT_DENY | IMPLICIT_DENY), matchedPolicies[] }
@@ -15,10 +19,12 @@
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 666px; }
+  #fig { width: 800px; height: 750px; }
   .card { left: 0; top: 0; width: 436px; }
   .card > .h { display: flex; align-items: center; gap: 10px; padding: 7px 12px; }
-  .card > .h img { width: 28px; height: 28px; }
+  .card > .h img { width: 28px; height: 28px; flex: none; }
+  .card > .h .ht { display: block; font-size: 17px; font-weight: 900; line-height: 1.35; white-space: nowrap; }
+  .card > .h .hs { display: block; font-size: 16px; font-weight: 500; line-height: 1.35; color: #cfcabd; }
   .card > pre { line-height: 1.45; padding: 10px 12px 12px; }
   .card > pre strong { font-weight: 800; }
 
@@ -36,7 +42,7 @@
 <div id="fig">
   <svg id="wires"></svg>
   <div class="card" id="json" data-chk="1">
-    <div class="h"><img src="../icons/AWSIdentityandAccessManagement.svg">API の応答 ・ 説明用に短くした例</div>
+    <div class="h"><img src="../icons/AWSIdentityandAccessManagement.svg"><div><span class="ht">GetRequestAuthorizationDetails の応答</span><span class="hs">説明用に短くした例</span></div></div>
 <pre>{
   <span id="r1"><strong>"requestContext"</strong>: {
     "aws:RequestedRegion": "us-east-1",
@@ -53,9 +59,12 @@
         "sid": <b>"DenyReadCertificate"</b>,
         "evaluatedEffect": <b>"DENY"</b>
       } ]
-    } ]</span>
+    }, <i>…</i> ]</span>
   } ],
   <span id="r4"><strong>"policies"</strong>: [
+    { "type": <strong>"IDENTITY_BASED_POLICY"</strong>,
+      "inline": true,
+      "uri": "inline:<i>…</i>" },
     { "type": <strong>"IDENTITY_BASED_POLICY"</strong>,
       "inline": false,
       "uri": "<i>…</i>/aws-deepcuts-managed-deny" },
@@ -68,8 +77,8 @@
 
   <div class="co" id="c1" data-chk="1"><i>1</i><b>リクエストのコンテキスト</b><code>requestContext</code><span>リクエスト全体の条件キーの値</span></div>
   <div class="co" id="c2" data-chk="1"><i>2</i><b>判定</b><code>evaluations[].evaluatedEffect</code><span>アクションとリソースの組ごとの判定</span></div>
-  <div class="co hot" id="c3" data-chk="1"><i>3</i><b>一致したポリシー</b><code>matchedPolicies</code><span>一致したポリシーとステートメント。<br>暗黙的な拒否では空になる</span></div>
-  <div class="co" id="c4" data-chk="1"><i>4</i><b>評価されたポリシー</b><code>policies</code><span>評価されたすべてのポリシーと、<br>その種類</span></div>
+  <div class="co hot" id="c3" data-chk="1"><i>3</i><b>一致したポリシー</b><code>evaluations[].matchedPolicies</code><span>一致したポリシーとステートメント。<br>暗黙的な拒否では空になる</span></div>
+  <div class="co" id="c4" data-chk="1"><i>4</i><b>評価されたポリシー</b><code>policies</code><span>評価されたすべてのポリシーと、<br>その種類・インラインかどうか</span></div>
 </div>
 <script>
 // 線を引く（wires.js と同じ太さと色）。点は [x, y] の配列

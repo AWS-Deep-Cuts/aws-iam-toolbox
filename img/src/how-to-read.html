@@ -6,16 +6,21 @@
        - Evaluation.matchedPolicies: 「An implicit denial produces no matched policies.」API リファレンスのサンプル 1 では空のリスト
        - MatchedStatement { sid, evaluatedEffect: ALLOW | DENY }
        - PolicyInfo.type: IDENTITY_BASED_POLICY, PERMISSIONS_BOUNDARY, SESSION_POLICY, SERVICE_CONTROL_POLICY など
-     評価の順序: IAM ユーザーガイド「ポリシーの評価論理」。明示的な Deny が 1 つでもあれば拒否。無ければ、許可を与えるポリシーに Allow が必要で、
-     許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシー）がある場合は、そのすべてに Allow が必要。
-     右の 3 つは、この順序に沿って上から確かめる。ハンズオンのステージ 3 では、条件と境界の両方が Allow していないため、
-     条件を直すとステージ 4 の境界の拒否が現れる。
-     ステージの対応は DESIGN-v3-iam.md の「ステージ」の表による。 -->
+       - 応答にポリシーの本文は含まれない（PolicyInfo のメンバーは type・inline・uri・attachedTo だけ。ファクトシート 059）。
+         そのため、Allow のステートメントや条件の中身は IAM コンソールでポリシーを開いて確かめる。
+     評価の順序: IAM ユーザーガイド「ポリシーの評価論理」。明示的な Deny が 1 つでもあれば拒否。無ければ、許可を与えるポリシーに、
+     その操作に一致する Allow が必要で、許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシーなど）がある場合は、
+     そのすべてに Allow が必要。右の 3 つの場合は、この順序に沿って上から確かめ、当てはまらなければ次へ進む。
+     エラーメッセージの拒否の理由（例: because no identity-based policy allows / because no permissions boundary allows）も
+     段階を見分ける手がかりになる（IAM ユーザーガイド「アクセス拒否エラーメッセージのトラブルシューティング」）。
+     左の修正「ポリシーを外す」は、インラインポリシーの削除（DeleteRolePolicy）、管理ポリシーのデタッチ（DetachRolePolicy）、
+     セッションポリシーを渡さずにロールに切り替え直すことのすべてを指す。
+     ステージの対応は DESIGN-v3-iam.md の「ステージ」の表による。ステージ 2 の「ID ベースポリシーが 1 つも無い」は、右の 1 つ目の場合に含まれる。 -->
 <link rel="stylesheet" href="diagram.css">
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 726px; }
+  #fig { width: 800px; height: 835px; }
 
   /* 最初に確かめること */
   .top { position: absolute; left: 230px; top: 0; width: 340px; height: 50px; border: 3px solid var(--ink); background: #fff;
@@ -37,16 +42,16 @@
   .st > span { margin-top: 8px; }
   .tags { margin-top: 10px; display: flex; gap: 8px; }
 
-  /* 右の 3 つの場合。上から順に確かめる */
-  .cs { position: absolute; left: 370px; width: 430px; border: 3px solid var(--ink); background: #fff; padding: 8px 12px 9px; }
+  /* 右の 3 つの場合。上から順に確かめ、当てはまらなければ次へ進む */
+  .cs { position: absolute; left: 350px; width: 450px; border: 3px solid var(--ink); background: #fff; padding: 8px 12px 9px; }
   .cs > b { display: block; font-size: 18px; font-weight: 900; line-height: 1.4; }
-  .cs > span { display: block; font-size: 16px; font-weight: 500; line-height: 1.45; margin-top: 4px; }
-  .cs > .stg { position: absolute; right: 10px; top: 9px; }
+  .cs > .fx { display: block; font-size: 16px; font-weight: 500; line-height: 1.45; margin-top: 4px; white-space: nowrap; }
+  .cs > .stg { position: absolute; right: 10px; top: 7px; }   /* 題の 1 行目と中心の高さをそろえる */
 
   /* ハンズオンのステージの札 */
   .stg { display: inline-block; white-space: nowrap; font-size: 16px; font-weight: 700; line-height: 1.3; padding: 1px 8px;
     border: 2px solid var(--ink); background: #fff; color: var(--ink); }
-  .legend { position: absolute; left: 0; width: 340px; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+  .legend { position: absolute; left: 0; width: 330px; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; line-height: 1.45; }
 
   .op { font-size: 16px; }
 </style>
@@ -55,34 +60,36 @@
   <svg id="wires"></svg>
   <div class="top" id="top" data-chk="1"><b>判定を確かめる</b><code>evaluatedEffect</code></div>
 
-  <div class="hd" id="hL" data-chk="1" style="left:0;width:340px"><code>EXPLICIT_DENY</code><span>明示的な拒否</span></div>
-  <div class="hd" id="hR" data-chk="1" style="left:370px;width:430px"><code>IMPLICIT_DENY</code><span>暗黙的な拒否</span></div>
+  <div class="hd" id="hL" data-chk="1" style="left:0;width:320px"><code>EXPLICIT_DENY</code><span>明示的な拒否</span></div>
+  <div class="hd" id="hR" data-chk="1" style="left:350px;width:450px"><code>IMPLICIT_DENY</code><span>暗黙的な拒否</span></div>
 
   <!-- どこを見るか -->
-  <div class="st hot" id="wL" data-chk="1" style="left:0;top:192px;width:340px;height:176px">
+  <div class="st hot" id="wL" data-chk="1" style="left:0;top:192px;width:320px;height:200px">
     <b>一致したポリシーを確認する</b>
 <pre>"sid": <em>"DenyReadCertificate"</em>,
 "evaluatedEffect": <em>"DENY"</em></pre>
     <span>DENY のステートメントが原因。<br>複数あれば、すべてが原因</span>
   </div>
-  <div class="st hot" id="wR" data-chk="1" style="left:370px;top:192px;width:430px;height:176px">
+  <div class="st hot" id="wR" data-chk="1" style="left:350px;top:192px;width:450px;height:200px">
     <b>一致したポリシーは空</b>
 <pre><strong>"matchedPolicies"</strong>: []</pre>
-    <span>原因のポリシーは表示されない。<br>評価されたポリシーの種類と、<br>リクエストのコンテキストから絞り込む</span>
+    <span>原因のポリシーは表示されない。<br>評価されたポリシーの種類、<br>リクエストのコンテキスト、<br>エラーメッセージの拒否の理由から絞り込む</span>
   </div>
 
   <!-- 修正 -->
-  <div class="st" id="fL" data-chk="1" style="left:0;top:418px;width:340px">
-    <b>そのステートメントを削除するか、<br>条件を見直す</b>
+  <div class="st" id="fL" data-chk="1" style="left:0;top:440px;width:320px">
+    <b>そのステートメントを含む<br>ポリシーを外すか、<br>ステートメントを修正する</b>
     <div class="tags"><span class="stg">ステージ 1</span><span class="stg">追加ステージ</span></div>
   </div>
 
-  <div class="lbl" style="left:597px;top:381px">上から順に確かめる</div>
-  <div class="cs" id="c1" data-chk="1" style="top:418px"><span class="stg">ステージ 2</span><b>ID ベースポリシーが 1 つも無い</b><span><span class="op">→</span> 許可するポリシーをアタッチする</span></div>
-  <div class="cs" id="c2" data-chk="1" style="top:506px"><span class="stg">ステージ 3</span><b>ID ベースポリシーはあるが、<br>Allow の条件を満たしていない</b><span><span class="op">→</span> リクエストのコンテキストの値と、条件を比較する</span></div>
-  <div class="cs" id="c3" data-chk="1" style="top:620px"><span class="stg">ステージ 4</span><b>アクセス許可の境界など、<br>許可を絞るポリシーがある</b><span><span class="op">→</span> そのポリシーにも Allow を追加する</span></div>
+  <div class="lbl" style="left:587px;top:405px">上から順に確かめる</div>
+  <div class="cs" id="c1" data-chk="1" style="top:440px"><span class="stg">ステージ 2</span><b>その操作を Allow する<br>ID ベースポリシーが無い</b><span class="fx"><span class="op">→</span> Allow のステートメントを持つポリシーをアタッチする</span></div>
+  <div class="lbl" style="left:587px;top:549px">当てはまらなければ</div>
+  <div class="cs" id="c2" data-chk="1" style="top:579px"><span class="stg">ステージ 3</span><b>ID ベースポリシーに Allow はあるが、<br>その条件を満たしていない</b><span class="fx"><span class="op">→</span> 条件とコンテキストの値を比べ、どちらかを修正する</span></div>
+  <div class="lbl" style="left:587px;top:688px">当てはまらなければ</div>
+  <div class="cs" id="c3" data-chk="1" style="top:718px"><span class="stg">ステージ 4</span><b>アクセス許可の境界など、<br>許可を絞るポリシーが Allow していない</b><span class="fx"><span class="op">→</span> そのポリシーにも Allow を追加する</span></div>
 
-  <div class="legend" style="top:676px"><span class="stg">ステージ N</span><span>ハンズオンで、<br>その原因を解消する段階</span></div>
+  <div class="legend" style="top:773px"><span class="stg">ステージ N</span><span>ハンズオンで、これが<br>拒否の原因になるステージ</span></div>
 </div>
 <script>
 window.addEventListener('load', async () => {
@@ -93,6 +100,8 @@ window.addEventListener('load', async () => {
   wire('#hR', '#wR', {from: 'b', to: 't'});
   wire('#wL', '#fL', {from: 'b', to: 't'});
   wire('#wR', '#c1', {from: 'b', to: 't'});
+  wire('#c1', '#c2', {from: 'b', to: 't'});      // 当てはまらなければ、次の場合へ
+  wire('#c2', '#c3', {from: 'b', to: 't'});
   document.body.dataset.ready = '1';
 });
 </script>

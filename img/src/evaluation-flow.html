@@ -3,28 +3,34 @@
 <!-- IAM がリクエストを許可するかどうかを決める順序（簡略化）。記事の「そもそも、AccessDenied の原因はなぜ分かりにくいのか？」と README の「ハンズオンのゴール」。
      問い 1: どれか 1 つのポリシーの Deny のステートメントに一致すれば、明示的な拒否（EXPLICIT_DENY）。
      問い 2: 許可を与えるポリシー（ID ベースポリシー・リソースベースポリシー）に一致する Allow が無ければ、暗黙的な拒否（IMPLICIT_DENY）。
-     問い 3: 許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシー）のうち、設定されているものが 1 つでも Allow していなければ、暗黙的な拒否。すべて Allow していれば ALLOW。
+     問い 3: 許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシー・VPC エンドポイントポリシー）のうち、
+             設定されているものが 1 つでも Allow していなければ、暗黙的な拒否。すべて Allow していれば ALLOW。
      根拠: IAM User Guide「ポリシーの評価論理」（Policy evaluation logic）と「Determining whether a request is allowed or denied within an account」
        （reference_policies_evaluation-logic_policy-eval-denyallow.html）。明示的な Deny は Allow より優先する。既定は暗黙的な拒否。
        セッションポリシーを渡さなかった場合は、既定のセッションポリシーが作られ、制限にならない（ファクトシート 107〜112）。
+       VPC エンドポイントポリシーも許可の上限を定めるポリシーで、記事のポリシーの表では「許可を絞る」に分類している。
+       評価の詳細の PolicyInfo.type にも VPC_ENDPOINT_POLICY がある（botocore iam-toolbox service-2.json）。
      判定の名前 EXPLICIT_DENY / IMPLICIT_DENY / ALLOW は、GetRequestAuthorizationDetails の応答の evaluatedEffect の値（botocore iam-toolbox service-2.json の EvaluatedEffect）。
-     公式の手順は RCP → SCP → リソースベース → ID ベース → 境界 → セッションの順に調べる。この図は、許可を与えるポリシーと許可を絞るポリシーの 2 つにまとめて簡略化している。
-     リソースベースポリシーの Allow だけで許可される場合（ファクトシート 110・111）などの例外は描かない（図の下の注記）。 -->
+     記事と README は、図の直後に「Access Troubleshooter が表示する判定の値」と説明する。
+     公式の手順は、明示的な Deny の確認の後、RCP → SCP → リソースベース → ID ベース → 境界 → セッションの順に調べる。
+     この図は、許可を与えるポリシーと許可を絞るポリシーの 2 つにまとめて簡略化している。
+     リソースベースポリシーの Allow だけで許可される場合（ファクトシート 110・111）などの例外は描かない（図の下の注記）。
+     問いの番号は「問い 1」のように書く。README の本文と、ステージの表の「拒否される問い」の列がこの呼び名を使う。 -->
 <link rel="stylesheet" href="diagram.css">
 <link rel="stylesheet" href="deepcuts.css">
 <script src="wires.js"></script>
 <style>
-  #fig { width: 800px; height: 584px; }
+  #fig { width: 800px; height: 682px; }
 
   /* 始まりのリクエスト */
   .start { position: absolute; background: var(--ink); color: #fff; font-size: 18px; font-weight: 900;
     display: flex; align-items: center; justify-content: center; }
 
-  /* 問い：番号・問い・対象のポリシー */
-  .q { position: absolute; left: 0; width: 520px; border: 3px solid var(--ink); background: #fff; padding: 10px 14px 0; display: flex; gap: 12px; }
-  .q > i { font-style: normal; font-family: var(--font-mono); font-weight: 800; font-size: 20px; color: var(--hot); line-height: 27px; }
-  .q > div > b { display: block; font-size: 19px; font-weight: 900; line-height: 27px; }
-  .q > div > span { display: block; margin-top: 6px; font-size: 16px; font-weight: 500; line-height: 1.45; }
+  /* 問い：番号の行・問い・対象のポリシー */
+  .q { position: absolute; left: 0; width: 520px; border: 3px solid var(--ink); background: #fff; padding: 9px 14px 0; }
+  .q > i { display: block; font-style: normal; font-size: 17px; font-weight: 900; color: var(--hot); line-height: 24px; }
+  .q > b { display: block; font-size: 19px; font-weight: 900; line-height: 27px; margin-top: 1px; }
+  .q > span { display: block; margin-top: 6px; font-size: 16px; font-weight: 500; line-height: 1.45; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chips > span { background: var(--bone); font-size: 16px; font-weight: 700; padding: 2px 10px; line-height: 1.45; }
 
@@ -48,34 +54,35 @@
 
   <div class="start" id="req" data-self="1" style="left:185px;top:0;width:150px;height:42px">リクエスト</div>
 
-  <div class="q" id="q1" data-self="1" style="top:76px;height:86px"><i>1</i><div>
+  <!-- 問いの箱の中心の高さ（131・284・471px）に、右の判定の箱の中心をそろえる -->
+  <div class="q" id="q1" data-self="1" style="top:76px;height:110px"><i>問い 1</i>
     <b>Deny のステートメントに一致したか</b>
-    <span>すべての種類のポリシーが対象</span></div></div>
+    <span>すべての種類のポリシーが対象</span></div>
 
-  <div class="q" id="q2" data-self="1" style="top:202px;height:96px"><i>2</i><div>
+  <div class="q" id="q2" data-self="1" style="top:226px;height:116px"><i>問い 2</i>
     <b>許可を与えるポリシーに、一致する Allow があるか</b>
-    <div class="chips"><span>ID ベースポリシー</span><span>リソースベースポリシー</span></div></div></div>
+    <div class="chips"><span>ID ベースポリシー</span><span>リソースベースポリシー</span></div></div>
 
-  <div class="q" id="q3" data-self="1" style="top:338px;height:128px"><i>3</i><div>
+  <div class="q" id="q3" data-self="1" style="top:382px;height:178px"><i>問い 3</i>
     <b>許可を絞るポリシーが、すべて Allow しているか</b>
-    <div class="chips"><span>SCP</span><span>RCP</span><span>アクセス許可の境界</span><span>セッションポリシー</span></div>
-    <span>設定されているものだけが対象</span></div></div>
+    <div class="chips"><span>SCP</span><span>RCP</span><span>アクセス許可の境界</span><span>セッションポリシー</span><span>VPC エンドポイントポリシー</span></div>
+    <span>設定されているものだけが対象</span></div>
 
-  <div class="res ok" id="allow" data-self="1" style="left:165px;top:506px;width:190px;height:58px"><b>ALLOW</b><span>許可</span></div>
+  <div class="res ok" id="allow" data-self="1" style="left:165px;top:600px;width:190px;height:58px"><b>ALLOW</b><span>許可</span></div>
 
-  <div class="res" id="r1" data-self="1" style="left:610px;top:87px;height:64px"><b>EXPLICIT_DENY</b><span>明示的な拒否</span></div>
-  <div class="res" id="r2" data-self="1" style="left:610px;top:218px;height:64px"><b>IMPLICIT_DENY</b><span>暗黙的な拒否</span></div>
-  <div class="res" id="r3" data-self="1" style="left:610px;top:370px;height:64px"><b>IMPLICIT_DENY</b><span>暗黙的な拒否</span></div>
+  <div class="res" id="r1" data-self="1" style="left:610px;top:99px;height:64px"><b>EXPLICIT_DENY</b><span>明示的な拒否</span></div>
+  <div class="res" id="r2" data-self="1" style="left:610px;top:252px;height:64px"><b>IMPLICIT_DENY</b><span>暗黙的な拒否</span></div>
+  <div class="res" id="r3" data-self="1" style="left:610px;top:439px;height:64px"><b>IMPLICIT_DENY</b><span>暗黙的な拒否</span></div>
 
   <!-- 分かれ道のラベル：下へ進む線は黒、拒否へ向かう線は差し色 -->
-  <div class="lbl yn hot" style="left:546px;top:92px">はい</div>
-  <div class="lbl yn" style="left:270px;top:170px">いいえ</div>
-  <div class="lbl yn hot" style="left:538px;top:223px">いいえ</div>
-  <div class="lbl yn" style="left:270px;top:306px">はい</div>
-  <div class="lbl yn hot" style="left:538px;top:375px">いいえ</div>
-  <div class="lbl yn" style="left:270px;top:474px">はい</div>
+  <div class="lbl yn hot" style="left:546px;top:104px">はい</div>
+  <div class="lbl yn" style="left:270px;top:194px">いいえ</div>
+  <div class="lbl yn hot" style="left:538px;top:257px">いいえ</div>
+  <div class="lbl yn" style="left:270px;top:350px">はい</div>
+  <div class="lbl yn hot" style="left:538px;top:444px">いいえ</div>
+  <div class="lbl yn" style="left:270px;top:568px">はい</div>
 
-  <div class="note" style="left:410px;top:500px">簡略化した図。リソースベースポリシーだけで<br>許可される場合などの例外は、<br>公式ドキュメント『ポリシーの評価論理』を参照</div>
+  <div class="note" style="left:410px;top:594px">簡略化した図。リソースベースポリシーだけで<br>許可される場合などの例外は、<br>公式ドキュメント『ポリシーの評価論理』を参照</div>
 </div>
 <script>
 window.addEventListener('load', async () => { await document.fonts.ready;
