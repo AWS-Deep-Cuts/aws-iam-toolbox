@@ -244,20 +244,20 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 | `--query` | `Policy.Description` | 応答のうち、説明文だけを取り出す |
 | `--output` | `text` | 文字列として表示する |
 
-読み取りは拒否され、`An error occurred (AccessDenied) when calling the GetPolicy operation:` に続けて、次のような形のエラーメッセージが表示されます。AWS CLI の版によっては、先頭に `aws: [ERROR]:` も付きます。メッセージは長いため、画面では複数行に折り返して表示されます。最後まで読んでください。次は出力の形の例で、アカウント ID・セッション名・authorization ID は環境ごとに異なります。
+読み取りは拒否され、`aws: [ERROR]: An error occurred (AccessDenied) when calling the GetPolicy operation:` に続けて、次のような形のエラーメッセージが表示されます。AWS CLI 2.39.4 では、1 行の空行の後に、このメッセージが表示されます。メッセージは長いため、画面では複数行に折り返して表示されます。最後まで読んでください。次は出力の形の例で、アカウント ID・セッション名・authorization ID は環境ごとに異なります。
 
 ```text
-User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012 is not authorized to perform: iam:GetPolicy on resource: policy arn:aws:iam::111122223333:policy/aws-deepcuts-certificate with an explicit deny in an identity-based policy. Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/0example1authorization2id for complete details, or call the GetRequestAuthorizationDetails API with the following authorization id: 0example1authorization2id
+User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012 is not authorized to perform: iam:GetPolicy on resource: policy arn:aws:iam::111122223333:policy/aws-deepcuts-certificate with an explicit deny in an identity-based policy: arn:aws:iam::111122223333:policy/aws-deepcuts-managed-deny. Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/0example1authorization2id for complete details, or call the GetRequestAuthorizationDetails API with the following authorization id: 0example1authorization2id
 ```
 
-メッセージの中ほどの `with an explicit deny in an identity-based policy` は、ID ベースポリシーによる明示的な拒否であることを示します。ID ベースポリシーに、リクエストに一致する Allow が無いことによる暗黙的な拒否の場合は、この部分が `because no identity-based policy allows the iam:GetPolicy action` のような形になります。この README では、この部分を**拒否の理由**と呼びます。メッセージの各部分の意味は、次の図のとおりです。拒否の理由は、図の 4 に当たります。
+メッセージの中ほどの `with an explicit deny in an identity-based policy` は、ID ベースポリシーによる明示的な拒否であることを示します。ID ベースポリシーに、リクエストに一致する Allow が無いことによる暗黙的な拒否の場合は、この部分が `because no identity-based policy allows the iam:GetPolicy action` のような形になり、後ろにポリシーの ARN は付きません。この README では、この部分を**拒否の理由**と呼びます。メッセージの各部分の意味は、次の図のとおりです。拒否の理由は、図の 4 に当たります。
 
 ![AccessDenied のエラーメッセージの読み方](img/error-message.png)
 
 > **この手順で確かめること**
 > - **やること**: エラーメッセージを最後まで読み、`authorization-details/` の後ろの文字列を確認します。
-> - **期待する結果**: メッセージの中ほど、図の 4 の部分に、拒否の理由 `with an explicit deny in an identity-based policy` があります。拒否の理由の後ろには、拒否したポリシーの ARN が付くことがあります。管理ポリシー `aws-deepcuts-managed-deny` の ARN であれば、`: arn:aws:iam::<アカウント ID>:policy/aws-deepcuts-managed-deny` のような形です。最後に、Access Troubleshooter の URL と authorization ID があります。URL の末尾と authorization ID は、同じ文字列です。
-> - **ここから分かること**: エラーメッセージで分かるのは、拒否したポリシーの種類と、多くても 1 つのポリシーの ARN です。インラインポリシーには ARN が無いため、拒否したポリシーがインラインポリシーの場合は、ARN は付きません。ハンズオン用ロールには Deny のポリシーが 2 つありますが、2 つ目があることはメッセージからは分かりません。authorization ID は、拒否されたこのリクエストを識別する ID です。この ID を Access Troubleshooter で照会すると、評価の詳細を確認できます。
+> - **期待する結果**: メッセージの中ほど、図の 4 の部分に、拒否の理由 `with an explicit deny in an identity-based policy` があります。拒否の理由の後ろには、拒否したポリシーの ARN `: arn:aws:iam::<アカウント ID>:policy/aws-deepcuts-managed-deny` が付いています。最後に、Access Troubleshooter の URL と authorization ID があります。URL の末尾と authorization ID は、同じ文字列です。
+> - **ここから分かること**: エラーメッセージで分かるのは、拒否したポリシーの種類と、多くても 1 つのポリシーの ARN です。インラインポリシーには ARN が無いため、拒否したポリシーがインラインポリシーの場合は、ARN は付きません。ハンズオン用ロールには Deny のポリシーが 2 つありますが、メッセージに表示されるのは管理ポリシーの ARN だけで、インラインポリシーのもう 1 つの Deny があることは、メッセージからは分かりません。authorization ID は、拒否されたこのリクエストを識別する ID です。この ID を Access Troubleshooter で照会すると、評価の詳細を確認できます。
 
 ## ３．Access Troubleshooter で拒否の原因を調べる
 
