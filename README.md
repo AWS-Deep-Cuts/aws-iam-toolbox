@@ -267,7 +267,7 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 2. 管理者としてマネジメントコンソールにサインインしているブラウザで、新しいタブを開き、URL を貼り付けて開きます。
 3. Access Troubleshooter の画面に、評価の詳細が表示されます。
 
-評価の詳細は、エラーを返す処理とは別に、少し遅れて記録されるため、拒否の直後は表示されないことがあります。表示されない場合は、10 秒ほど待ってから画面を再読み込みしてください。API リファレンスによると、評価の詳細は、拒否から少なくとも 24 時間は照会できます。それより後も照会できるとは限らないため、拒否から 24 時間以内に照会してください。
+評価の詳細は、エラーを返す処理とは別に、少し遅れて記録されるため、拒否の直後は表示されないことがあります。表示されない場合は、10〜30 秒ほど待ってから画面を再読み込みしてください。拒否から 10 秒ほどでは記録されておらず、30 秒ほど後には照会できたこともありました。API リファレンスによると、評価の詳細は、拒否から少なくとも 24 時間は照会できます。それより後も照会できるとは限らないため、拒否から 24 時間以内に照会してください。
 
 <!-- 画面写真: Access Troubleshooter の画面（ステージ 1）。判定・一致したポリシーとステートメント・評価されたポリシー・リクエストのコンテキストの 4 か所を番号つきの枠で囲む -->
 
@@ -330,7 +330,7 @@ python3 explain.py authorization-details.json
 
 `explain.py` は、取得した JSON を整形して表示します。最初にリクエストのコンテキストを表示し、次に評価ごとに、判定と一致したポリシーの後に `→ 原因の候補（スクリプトによる推測）` を表示します。最後に、評価されたポリシーの一覧を表示します。原因の候補は、スクリプトが評価の詳細から推測したもので、AWS の応答には含まれません。
 
-`ResourceNotFoundException` や `ValidationException` が表示された場合は、`AUTH_ID` に自分の authorization ID を設定したかを確認します。そのうえで、10 秒ほど待ってから、評価の詳細を取得するコマンドを、管理者のまま実行し直します。
+`ResourceNotFoundException` や `ValidationException` が表示された場合は、`AUTH_ID` に自分の authorization ID を設定したかを確認します。そのうえで、10〜30 秒ほど待ってから、評価の詳細を取得するコマンドを、管理者のまま実行し直します。
 
 確認が終わったら、次のコマンドでハンズオン用ロールに戻ります。
 
@@ -597,9 +597,9 @@ rm -rf ~/.local/aws-cli ~/.local/bin/aws ~/.local/bin/aws_completer
 | 修正したのに、同じ理由で拒否される | IAM の変更の反映が間に合っていない | 10 秒ほど待ってから再実行する。タグを変更した場合は、`source ./switch-role.sh` で切り替え直す。それでも拒否される場合は、新しいエラーメッセージの URL で評価の詳細を開き、評価されたポリシーの一覧を確認する。ステージ 1 の削除は、削除したポリシーが一覧から消えていれば反映されている。ステージ 2 のアタッチは、アタッチしたポリシーが一覧にあれば反映されている。ステージ 4 の編集は、ポリシーの本文が評価の詳細に含まれないため、IAM コンソールでポリシーの JSON を確認する |
 | ステージ 3 で、ステージ 2 と同じ理由で拒否される | 条件を満たさない拒否も、一致する Allow が無い拒否として表示される。正常な動作である | ステージ 3 の「このステージで確かめること」に進む |
 | エラーメッセージに authorization ID が無い | 2026 年 10 月時点で、authorization ID は保証されていない | `aws iam get-policy` で読み取りを試しているかを確認する。もう一度読み取りを試し、新しいエラーメッセージを確認する |
-| Access Troubleshooter の画面に評価の詳細が表示されない | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、または `us-east-1` 以外の画面を開いている | 10 秒ほど待って再読み込みする。URL の `region=us-east-1` を確認する。プロンプトの先頭に `(handson-role)` が表示されている CloudShell で、もう一度読み取りを試し、新しいエラーメッセージの URL を開く |
+| Access Troubleshooter の画面に評価の詳細が表示されない | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、または `us-east-1` 以外の画面を開いている | 10〜30 秒ほど待って再読み込みする。URL の `region=us-east-1` を確認する。プロンプトの先頭に `(handson-role)` が表示されている CloudShell で、もう一度読み取りを試し、新しいエラーメッセージの URL を開く |
 | `get-request-authorization-details` が `AccessDeniedException` になる | ハンズオン用ロールのまま照会している | `source ./switch-back.sh` で管理者に戻ってから実行する |
-| `get-request-authorization-details` が `ResourceNotFoundException` または `ValidationException` になる | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、`AUTH_ID` が自分の authorization ID になっていない、または `us-east-1` 以外で照会している | `AUTH_ID` と `--region us-east-1` を確認し、10 秒ほど待ってから、管理者のまま再実行する。解決しない場合は、`source ./switch-role.sh` でハンズオン用ロールに切り替えてから読み取りを試し、新しいエラーメッセージの authorization ID を控える。`source ./switch-back.sh` で管理者に戻ってから、その ID で照会する |
+| `get-request-authorization-details` が `ResourceNotFoundException` または `ValidationException` になる | 拒否の直後で評価の詳細がまだ記録されていない、拒否から 24 時間を過ぎた、`AUTH_ID` が自分の authorization ID になっていない、または `us-east-1` 以外で照会している | `AUTH_ID` と `--region us-east-1` を確認し、10〜30 秒ほど待ってから、管理者のまま再実行する。解決しない場合は、`source ./switch-role.sh` でハンズオン用ロールに切り替えてから読み取りを試し、新しいエラーメッセージの authorization ID を控える。`source ./switch-back.sh` で管理者に戻ってから、その ID で照会する |
 | `cleanup.sh` が `ハンズオン用ロールに切り替えたままです` で止まる | 環境変数にハンズオン用ロールの認証情報が残っている | `source ./switch-back.sh` を実行してから再実行する |
 
 ## 参考リンク
