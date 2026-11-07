@@ -134,17 +134,17 @@ API と AWS CLI では、この機能は IAM Toolbox という名前で提供さ
 
 ここでは、記事の最後で紹介するハンズオンで表示されるエラーメッセージを例にします。ハンズオンでは、AWS CloudShell を使います。AWS CloudShell は、マネジメントコンソールにサインインしたユーザーの権限で、ブラウザから AWS CLI のコマンドを実行できる環境です。ハンズオンでは、説明文にハンズオンの修了証を書いた管理ポリシー `aws-deepcuts-certificate` を用意し、この説明文を読み取ることを目標にします。この記事では、このポリシーを**修了証のポリシー**と呼びます。ハンズオンの参加者は、CloudShell で IAM ロール `aws-deepcuts-handson-role` に切り替えてから、IAM の `GetPolicy` API で修了証のポリシーの情報を取得しようとします。このロールを**ハンズオン用ロール**と呼びます。このリクエストは、IAM に拒否されます。
 
-このとき CloudShell には、AWS CLI が先頭に付ける `An error occurred (AccessDenied) when calling the GetPolicy operation:` に続けて、次の形のメッセージが表示されます。authorization ID、アカウント ID、セッション名は説明用の値です。
+このとき CloudShell には、AWS CLI が先頭に付ける `aws: [ERROR]: An error occurred (AccessDenied) when calling the GetPolicy operation:` に続けて、次の形のメッセージが表示されます。authorization ID、アカウント ID、セッション名は説明用の値です。
 
 ```text
-User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012 is not authorized to perform: iam:GetPolicy on resource: policy arn:aws:iam::111122223333:policy/aws-deepcuts-certificate with an explicit deny in an identity-based policy. Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/0example1authorization2id for complete details, or call the GetRequestAuthorizationDetails API with the following authorization id: 0example1authorization2id
+User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-153012 is not authorized to perform: iam:GetPolicy on resource: policy arn:aws:iam::111122223333:policy/aws-deepcuts-certificate with an explicit deny in an identity-based policy: arn:aws:iam::111122223333:policy/aws-deepcuts-managed-deny. Go to https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/0example1authorization2id for complete details, or call the GetRequestAuthorizationDetails API with the following authorization id: 0example1authorization2id
 ```
 
 メッセージの各部分の意味は、次の図のとおりです。
 
 ![AccessDenied のエラーメッセージの読み方](../img/error-message.png)
 
-図の 4 の `with an explicit deny in an identity-based policy` は、ID ベースポリシーによる明示的な拒否であることを示します。この部分を、この記事では**拒否の理由**と呼びます。ID ベースポリシーに、リクエストに一致する Allow が無いことによる暗黙的な拒否の場合は、拒否の理由が `because no identity-based policy allows the iam:GetPolicy action` のような形になります。原因が管理ポリシーの場合は、`identity-based policy` の後ろに `: <ポリシーの ARN>` が付くことがあります。インラインポリシーには ARN が無いため、ARN は付きません。
+図の 4 の `with an explicit deny in an identity-based policy` は、ID ベースポリシーによる明示的な拒否であることを示します。この部分を、この記事では**拒否の理由**と呼びます。ID ベースポリシーに、リクエストに一致する Allow が無いことによる暗黙的な拒否の場合は、拒否の理由が `because no identity-based policy allows the iam:GetPolicy action` のような形になります。原因が管理ポリシーの場合は、`identity-based policy` の後ろに `: <ポリシーの ARN>` が付くことがあります。上の例でも、管理ポリシー `aws-deepcuts-managed-deny` の ARN が付いています。インラインポリシーには ARN が無いため、ARN は付きません。
 
 このエラーメッセージだけでは分からないことを、Access Troubleshooter は補います。主な特徴は次のとおりです。
 
