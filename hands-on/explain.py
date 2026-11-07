@@ -37,7 +37,7 @@ def load(path):
     except (OSError, ValueError) as e:
         sys.exit(f"❌ {path} を JSON として読めませんでした（{e}）。\n"
                  "   get-request-authorization-details が ResourceNotFoundException などで失敗していないか確認し、"
-                 "数秒待ってからもう一度実行してください。")
+                 "10〜30 秒待ってからもう一度実行してください。")
 
 
 def short(value, width=100):
@@ -119,28 +119,31 @@ def verdict(ev, policies, request_context):
                     culprits.append(f"{POLICY_LABEL.get(ptype, ptype)} の Sid={st.get('sid')!r}")
         return "Deny のステートメントに一致したため拒否されました。原因: " + ("、".join(culprits) if culprits else "一致した DENY のステートメントの情報がありません")
 
-    # IMPLICIT_DENY: API リファレンスによると、一致したポリシーは返らない。評価されたポリシーの種類から候補を絞る。
-    # ただし、AWS Organizations の組織に属するアカウントでは、SCP の Allow が一致したポリシーに並ぶことがある
+    # IMPLICIT_DENY: API リファレンスには「暗黙的な拒否では一致したポリシーは返らない」とあるが、実際には
+    # 一致した Allow のステートメントが返る（2026-11 の検証）。原因のポリシー（Allow が無いポリシー）は返らないため、
+    # 一致した Allow のあるポリシーの種類と、評価されたポリシーの種類から候補を絞る。
+    # --session-policy を付けずにロールに切り替えたセッションでも、Sid が <Statement1> のセッションポリシーの ALLOW が並ぶ。
+    # AWS Organizations の組織に属するアカウントでは、SCP の Allow が並ぶこともある
     allow_types = {policies.get(mp.get("uri"), {}).get("type") for mp in matched
                    if any(st.get("evaluatedEffect") == "ALLOW" for st in (mp.get("matchedStatements") or []))}
     evaluated_types = {p.get("type") for p in policies.values()}
-    gates_present = sorted(t for t in evaluated_types if t in GATE_TYPES)
+    # 許可を絞るポリシーのうち、一致した Allow があるものは、このリクエストを拒否していない
+    gates_present = sorted(t for t in evaluated_types if t in GATE_TYPES and t not in allow_types)
     context_keys = set(request_context) | set(ev.get("context") or {})
     tag_keys = sorted(k for k in context_keys if k.startswith("aws:PrincipalTag/") or k.startswith("aws:RequestTag/") or k.startswith("aws:ResourceTag/"))
 
     if allow_types & GRANT_TYPES:
-        gates = [g for g in gates_present if g not in allow_types]
-        if gates:
+        if gates_present:
             return ("ID ベースポリシーかリソースベースポリシーは Allow していますが、拒否されています。原因の候補は、Allow が無い "
-                    + "、".join(POLICY_LABEL[g] for g in gates) + " です。")
+                    + "、".join(POLICY_LABEL[g] for g in gates_present) + " です。")
         return "ID ベースポリシーは Allow していますが、拒否されています。許可を絞るポリシー（SCP・RCP・アクセス許可の境界・セッションポリシー）が許可していない可能性があります。"
 
     if not (evaluated_types & GRANT_TYPES):
         msg = ("評価されたポリシーに ID ベースポリシーが 1 つもありません。このユーザーやロールには、このアクションを許可するポリシーがありません。"
                "このアクションを Allow する ID ベースポリシーを追加してください。")
     else:
-        # 暗黙的な拒否では一致したポリシーが返らないため、ID ベースポリシーの Allow が一致したかどうかは、この応答からは分からない
-        msg = ("暗黙的な拒否のため、一致したポリシーは表示されません。評価されたポリシーには、ID ベースポリシーがあります。"
+        # 評価された ID ベースポリシーはあるが、一致した Allow が無い。Condition を満たさない Allow は、一致したポリシーに並ばない
+        msg = ("一致したポリシーに、ID ベースポリシーの Allow がありません。評価されたポリシーには、ID ベースポリシーがあります。"
                "原因は次のどちらかです。(1) ID ベースポリシーの Allow の Condition を、コンテキストの値が満たしていない。")
         if tag_keys:
             msg += "条件キーの値: " + ", ".join(f"{k} = {short(request_context.get(k, (ev.get('context') or {}).get(k)), 40)}" for k in tag_keys) + "。"
@@ -151,6 +154,8 @@ def verdict(ev, policies, request_context):
             msg += "(2) Allow のステートメントの Action か Resource が、リクエストに当てはまっていない。"
         msg += ("エラーメッセージの拒否の理由が `no identity-based policy allows` であれば ID ベースポリシーの Condition と書き方を、"
                 "`no permissions boundary allows` であればアクセス許可の境界を確かめてください。")
+    if "SESSION_POLICY" in allow_types:
+        msg += " セッションポリシーの ALLOW の一致（Sid が <Statement1> のものを含む）は「セッションポリシーは拒否していない」という意味で、拒否の原因ではありません。"
     if "SERVICE_CONTROL_POLICY" in allow_types:
         msg += " SCP の ALLOW の一致は「SCP は拒否していない」という意味で、拒否の原因ではありません。"
     return msg
