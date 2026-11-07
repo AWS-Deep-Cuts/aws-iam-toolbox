@@ -5,9 +5,8 @@
 
 解説記事の原稿は [article/aws-iam-toolbox.md](./article/aws-iam-toolbox.md) にあります。
 
-<!-- TODO（公開前に著者が確認）: ステージ 1〜4 と追加ステージのそれぞれで、iam:GetPolicy の拒否のエラーメッセージに authorization ID と Access Troubleshooter の URL が付くこと、および拒否の理由が各ステージの「期待する結果」と一致すること（ステージ 2・3 は because no identity-based policy allows、ステージ 4 は because no permissions boundary allows、追加ステージは with an explicit deny in a session policy）を実機で確かめ、確かめた日付を下の Note に書く。一致しない場合は、ステージ 2〜4 の説明を実際の表示に合わせて直す -->
-
 > **Note**: IAM Access Troubleshooter は、2026 年 8 月にプレビューとして提供が始まった機能で、2026 年 10 月時点でもプレビューです。画面や仕様は、今後変わる可能性があります。
+> - この README の手順は、2026 年 11 月 5 日に、`us-east-1` の AWS CLI 2.39.4 で実機で確かめました。ステージ 1〜4 と追加ステージのすべてで、エラーメッセージに authorization ID と Access Troubleshooter の URL が付き、拒否の理由は各ステージの「期待する結果」のとおりでした。
 > - 2026 年 8 月 25 日の AWS SDK と AWS CLI の変更履歴によると、プレビューを提供するリージョンは、**バージニア北部（`us-east-1`）だけ** です。公式ドキュメントは、対応する API とリージョンを順次広げていると説明しています。筆者が 2026 年 10 月に確認した範囲では、東京リージョンでの提供の発表は見つかりませんでした。この機能で拒否の原因を調べるときは、拒否が起きたのと同じリージョンで調べる必要があります。そのため、このハンズオンはすべて `us-east-1` で実施します。
 > - 公式ドキュメントによると、2026 年 10 月時点で、拒否されたリクエストを識別する authorization ID がエラーメッセージに付くのは、IAM（AWS Identity and Access Management）の大半の API です。そのため、このハンズオンでは IAM のポリシーを読み取る操作を題材にします。
 >
@@ -265,7 +264,7 @@ User: arn:aws:sts::111122223333:assumed-role/aws-deepcuts-handson-role/handson-1
 
 1. CloudShell で、エラーメッセージの `https://us-east-1.console.aws.amazon.com/iam/home?region=us-east-1#/authorization-details/...` の部分を選択してコピーします。コピーするのは、`https://` から、URL の末尾にある authorization ID の最後の文字までです。URL の直後の `for complete details,` は含めません。
 2. 管理者としてマネジメントコンソールにサインインしているブラウザで、新しいタブを開き、URL を貼り付けて開きます。
-3. Access Troubleshooter の画面に、評価の詳細が表示されます。
+3. 「iam:GetPolicy のアクセスが拒否されました」という題の Access Troubleshooter の画面に、評価の詳細が表示されます。日本語表示のコンソールでは、Access Troubleshooter は「アクセストラブルシューティングツール」と表示されます。
 
 評価の詳細は、エラーを返す処理とは別に、少し遅れて記録されるため、拒否の直後は表示されないことがあります。表示されない場合は、10〜30 秒ほど待ってから画面を再読み込みしてください。拒否から 10 秒ほどでは記録されておらず、30 秒ほど後には照会できたこともありました。API リファレンスによると、評価の詳細は、拒否から少なくとも 24 時間は照会できます。それより後も照会できるとは限らないため、拒否から 24 時間以内に照会してください。
 
