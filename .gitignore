@@ -1,0 +1,7 @@
+resource-ids.env
+hands-on/authorization-details.json
+__pycache__/
+*.pyc
+
+# 図の書き出し用の依存（img/src で npm install したもの）
+node_modules

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<!-- ステージ 2 の原因（README 手順 4）。Deny を削除した後、iam:GetPolicy を許可する ID ベースポリシーが無く、暗黙的な拒否（IMPLICIT_DENY）になる。
+     修正: 「許可を追加」から「ポリシーをアタッチ」を選び、aws-deepcuts-read-certificate をアタッチする（AttachRolePolicy）。
+     中身は role-layers.js（role-layers・stage-1〜stage-4 で共通の枠組み。body の data-mode で描き分ける）。
+     根拠: hands-on/setup.sh（ロール・ポリシー・Sid・タグ・アクセス許可の境界）、DESIGN-v3-iam.md の「ステージ」の表、README の各ステージの修正の手順。
+     アイコン: npm パッケージ aws-icons（AWSIdentityAccessManagementRole, AWSIdentityAccessManagementPermissions） -->
+<link rel="stylesheet" href="diagram.css">
+<link rel="stylesheet" href="deepcuts.css">
+<script src="wires.js"></script>
+</head><body data-mode="stage-2">
+<div id="fig"><svg id="wires"></svg></div>
+<script src="role-layers.js"></script>
+</body></html>
