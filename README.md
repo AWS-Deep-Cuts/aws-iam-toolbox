@@ -480,6 +480,8 @@ aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --outpu
 > - **期待する結果**: エラーメッセージの拒否の理由が `because no permissions boundary allows the iam:GetPolicy action` に変わっています。判定は `IMPLICIT_DENY` です。一致したポリシーに、`aws-deepcuts-read-certificate` の Sid `AllowReadCertificateForSecurityTeam` が、効果 `ALLOW` で表示されます。`aws-deepcuts-boundary` は、一致したポリシーにありません。評価されたポリシーの一覧に `aws-deepcuts-boundary` があり、その種類はアクセス許可の境界を表す `PERMISSIONS_BOUNDARY` です。リクエストのコンテキストの `aws:PrincipalTag/team` の値が `security` に変わり、`aws-deepcuts-read-certificate` の `Condition` を満たしています。
 > - **ここから分かること**: ID ベースポリシーが Allow していても、アクセス許可の境界が Allow していなければ、IAM はリクエストを拒否します。アクセス許可の境界は、事前準備のときからロールに設定されていました。ステージ 1〜3 でも、アクセス許可の境界は `iam:GetPolicy` を許可していませんでした。ただし、ステージ 2 で説明したとおり、複数の種類のポリシーがリクエストを拒否している場合でも、エラーメッセージに含まれるのは、そのうち 1 種類だけです。拒否の理由には、ステージ 1 では ID ベースポリシーによる明示的な拒否が、ステージ 2・3 では ID ベースポリシーによる暗黙的な拒否が示されていました。そのため、アクセス許可の境界による拒否は、拒否の理由に表示されませんでした。暗黙的な拒否では、原因のアクセス許可の境界は、一致したポリシーに表示されません。代わりに、ステージ 3 では表示されなかった ID ベースポリシーの Allow が、一致したポリシーに表示されます。評価されたポリシーの一覧にある境界が、一致したポリシーに無いことと、エラーメッセージの拒否の理由を組み合わせて、アクセス許可の境界が原因だと判断します。
 
+> **Note**: 2026 年 11 月 18 日の検証（AWS CLI 2.41.0）では、API の応答の `evaluations[]` の各要素に、この README で扱う 4 つの項目のほかに、`checks` という配列もありました。`checks` には、`checkType`（`PRINCIPAL`・`PERMISSIONS_BOUNDARY`・`SESSION`）ごとの判定 `evaluatedEffect` が入っていました。ステージ 1〜3 の拒否でも、`checkType` が `PERMISSIONS_BOUNDARY` の判定は `IMPLICIT_DENY` でした。アクセス許可の境界による拒否が隠れていたのは、エラーメッセージの拒否の理由の中だけで、API の応答の `checks` には表れていました。`explain.py` は `checks` を表示しません。`checks` を見る場合は、`authorization-details.json` を直接開いてください。コンソールの画面に `checks` に当たる表示があるかは、確かめていません。
+
 評価の詳細から分かった原因を、ロールの設定の図で確かめます。
 
 ![ステージ 4 の原因](img/stage-4.png)
@@ -527,6 +529,8 @@ source ./switch-role.sh
 ```bash
 aws iam get-policy --policy-arn "${CERT_ARN}" --query Policy.Description --output text
 ```
+
+ステージ 4 の修正の直後は、IAM の変更の反映が間に合わず、ステージ 4 と同じ `because no permissions boundary allows the iam:GetPolicy action` の理由で拒否されることがあります。その場合は、10 秒ほど待ってから再実行してください。2026 年 11 月 18 日の検証では、CLI で境界を修正した直後の 1 回目は拒否され、10 秒後には修了証が表示されました。
 
 プロンプトの先頭に `(handson-role)` が表示されている状態で修了証が表示されたら、ハンズオンのクリアです。管理者のまま実行して表示された修了証は、拒否の原因を解消した結果ではありません。次は出力の形の例です。アカウント ID と日付は、環境ごとに異なります。`setup.sh` の実行時に「日本語の説明文が受け付けられなかったため、英語の修了証で作成します。」と表示された場合は、`[Certificate]` で始まる英語の修了証が表示されます。
 
